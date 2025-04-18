@@ -6,6 +6,9 @@ from fastapi.staticfiles import StaticFiles
 from lifespan import lifespan
 
 from api import *
+from models import Base, engine
+
+Base.metadata.create_all(bind=engine)
 
 # Changez "router" en "app" pour suivre la convention
 app = FastAPI(lifespan=lifespan)
