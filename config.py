@@ -3,7 +3,8 @@ from logging import basicConfig, ERROR, error
 from os import makedirs
 
 # URLs et chemins
-BASE_URL = "http://192.168.11.103:8000"
+BASE_URL = "https://realb.onrender.com"
+# BASE_URL = "http://192.168.11.103:8000"
 
 # Extensions de fichiers
 IMAGE_EXTENSIONS = {"jpg", "jpeg", "png"}
