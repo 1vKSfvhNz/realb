@@ -1,0 +1,145 @@
+{
+    "general": {
+      "unauthorized": "Vous n'êtes pas autorisé à effectuer cette action.",
+      "not_found": "Ressource non trouvée.",
+      "server_error": "Erreur interne du serveur.",
+      "bad_request": "Requête invalide."
+    },
+  
+    "auth": {
+      "login": {
+        "invalid_credentials": "Email ou mot de passe incorrect",
+        "missing_fields": "Veuillez fournir un email et un mot de passe."
+      },
+      "forgot_password": {
+        "user_not_found": "Utilisateur inexistant. Veuillez verifier votre email",
+        "email_failed": "Échec de l'envoi du courriel de réinitialisation."
+      },
+      "reset_password": {
+        "no_request": "Pas de demande enrégistré",
+        "expired_code": "Code expiré",
+        "invalid_code": "Code incorrect",
+        "password_mismatch": "Mot de passe différent"
+      },
+      "verify_code": {
+        "no_request": "Pas de demande enrégistré",
+        "expired_code": "Code expiré",
+        "invalid_code": "Code incorrect"
+      }
+    },
+  
+    "banners": {
+      "create": {
+        "no_permission": "Vous n'avez pas la permission d'ajouter une bannière.",
+        "unsupported_format": "Format de fichier non supporté",
+        "invalid_date": "Date invalide pour 'until'",
+        "missing_fields": "Veuillez remplir tous les champs obligatoires."
+      },
+      "update": {
+        "no_permission": "Vous n'avez pas la permission d'ajouter une bannière.",
+        "not_found": "Bannière inexistante",
+        "unsupported_format": "Format de fichier non supporté",
+        "missing_fields": "Veuillez remplir tous les champs obligatoires."
+      },
+      "delete": {
+        "no_permission": "Vous n'avez pas la permission d'ajouter une bannière.",
+        "not_found": "Bannière inexistante"
+      }
+    },
+  
+    "categories": {
+      "create": {
+        "no_permission": "Vous n'avez pas la permission d'ajouter une catégorie.",
+        "already_exists": "La catégorie existe déjà",
+        "invalid_icon_type": "La type d'icone inexistant",
+        "missing_fields": "Veuillez remplir tous les champs obligatoires."
+      },
+      "update": {
+        "no_permission": "Vous n'avez pas la permission d'ajouter où de modifier une catégorie",
+        "not_found": "Catégorie inexistante",
+        "already_exists": "La catégorie existe déjà",
+        "missing_fields": "Veuillez remplir tous les champs obligatoires."
+      },
+      "delete": {
+        "no_permission": "Vous n'avez pas la permission d'ajouter, de modifier où de supprimer une catégorie",
+        "not_found": "Catégorie inexistante"
+      }
+    },
+  
+    "users": {
+      "create": {
+        "email_exists": "Email déjà utilisé",
+        "missing_fields": "Veuillez remplir tous les champs obligatoires.",
+        "invalid_email": "Format d'email invalide.",
+        "password_too_short": "Le mot de passe doit contenir au moins 8 caractères."
+      },
+      "update_role": {
+        "no_permission": "Vous n'avez pas la permission d'effectuer cette action.",
+        "user_not_found": "Utilisateur non trouvé",
+        "invalid_role": "Rôle invalide"
+      },
+      "list": {
+        "no_permission": "Vous n'avez pas la permission d'effectuer cette action."
+      }
+    },
+  
+    "products": {
+      "create": {
+        "no_permission": "Vous n'avez pas la permission d'ajouter un produit.",
+        "unsupported_format": "Format de fichier non supporté",
+        "missing_fields": "Veuillez remplir tous les champs obligatoires.",
+        "invalid_price": "Le prix doit être supérieur à zéro.",
+        "invalid_category": "Catégorie invalide ou inexistante."
+      },
+      "update": {
+        "no_permission": "Vous n'avez pas la permission d'ajouter, de modifier où de supprimer un produit",
+        "not_found": "Produit non trouvé",
+        "unsupported_format": "Format de fichier non supporté",
+        "missing_fields": "Veuillez remplir tous les champs obligatoires.",
+        "invalid_price": "Le prix doit être supérieur à zéro.",
+        "invalid_category": "Catégorie invalide ou inexistante."
+      },
+      "delete": {
+        "no_permission": "Vous n'avez pas la permission d'ajouter, de modifier où de supprimer un produit",
+        "not_found": "Produit non trouvé"
+      }
+    },
+  
+    "http": {
+      "400": "Requête incorrecte",
+      "401": "Non autorisé",
+      "403": "Accès interdit",
+      "404": "Ressource non trouvée",
+      "405": "Méthode non autorisée",
+      "408": "Délai d'attente dépassé",
+      "409": "Conflit",
+      "413": "Entité trop grande",
+      "415": "Type de média non supporté",
+      "422": "Entité non traitable",
+      "429": "Trop de requêtes",
+      "500": "Erreur interne du serveur",
+      "502": "Mauvaise passerelle",
+      "503": "Service indisponible",
+      "504": "Délai de la passerelle dépassé"
+    },
+  
+    "files": {
+      "upload": {
+        "too_large": "Fichier trop volumineux. Taille maximale: 10MB",
+        "unsupported_format": "Format de fichier non supporté",
+        "corrupted": "Fichier corrompu ou invalide"
+      }
+    },
+  
+    "validation": {
+      "required": "Ce champ est obligatoire",
+      "min_length": "Ce champ doit contenir au moins {min} caractères",
+      "max_length": "Ce champ ne peut pas dépasser {max} caractères",
+      "email_format": "Format d'email invalide",
+      "numeric": "Ce champ doit être un nombre",
+      "positive": "Ce champ doit être un nombre positif",
+      "date_format": "Format de date invalide",
+      "color_format": "Format de couleur invalide (utilisez le format hexadécimal ou RGB)",
+      "phone_format": "Format de téléphone invalide"
+    }
+  }

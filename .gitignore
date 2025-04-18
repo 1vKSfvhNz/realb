@@ -1,0 +1,15 @@
+# Fichiers Python compilés
+__pycache__/
+*.py[cod]
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# fichiers IDE
+.vscode/
+.idea/
+
+# fichiers secrets
+.env
+db.sql
