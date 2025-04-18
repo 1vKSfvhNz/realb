@@ -14,7 +14,6 @@ HOST=getenv('HOST'),
 PORT=getenv('PORT'),
 DATABASE=getenv('DATABASE')
 
-
 # ✅ 
 DATABASE_URL = URL.create(
     drivername=DRIVERNAME,
