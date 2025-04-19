@@ -10,7 +10,7 @@ class UserPreferenceProfile(Base):
     Profil de préférences utilisateur agrégé pour le machine learning
     """
     __tablename__ = "user_preference_profiles"
-
+    
     user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
     
     # Caractéristiques de préférences agrégées
@@ -41,15 +41,17 @@ class UserPreferenceProfile(Base):
         # Mettre à jour le nombre total de commandes
         self.total_orders += 1
         
+        if self.average_order_value is None:
+            self.average_order_value = 0
         # Mettre à jour la valeur moyenne de commande
         self.average_order_value = (
             (self.average_order_value * (self.total_orders - 1) + new_order.total_amount) 
             / self.total_orders
         )
         
-        # Mettre à jour la catégorie la plus achetée
-        if new_order.preferred_categories:
-            self.most_purchased_category_id = new_order.preferred_categories[0]
+        # Mettre à jour la catégorie la plus achetée - FIX: preferred_categories est un entier, pas une liste
+        if new_order.preferred_categories is not None:
+            self.most_purchased_category_id = new_order.preferred_categories
         
         # Récupérer les produits de la commande
         items = db.query(order_products).filter(order_products.c.order_id == new_order.id).all()
@@ -64,8 +66,14 @@ class UserPreferenceProfile(Base):
         
         # Mettre à jour les devises préférées
         if new_order.preferred_currencies:
+            # Assurons-nous que preferred_currencies est une liste même si c'est une chaîne simple
+            if isinstance(new_order.preferred_currencies, str):
+                currencies_to_add = [new_order.preferred_currencies]
+            else:
+                currencies_to_add = new_order.preferred_currencies
+                
             self.preferred_currencies = list(set(
-                (self.preferred_currencies or []) + new_order.preferred_currencies
+                (self.preferred_currencies or []) + currencies_to_add
             ))
         
         # Mettre à jour le moment préféré d'achat
@@ -79,7 +87,7 @@ class UserPreferenceProfile(Base):
         # Exemple de suivi complexe des préférences de catégorie
         self.additional_preferences.setdefault('category_purchase_count', {})
         for item in items:
-            if item.product_category_id:
+            if hasattr(item, 'product_category_id') and item.product_category_id:
                 cat_id_str = str(item.product_category_id)
                 self.additional_preferences['category_purchase_count'][cat_id_str] = \
                     self.additional_preferences['category_purchase_count'].get(cat_id_str, 0) + item.quantity
