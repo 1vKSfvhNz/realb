@@ -97,17 +97,17 @@ async def list_orders_by_deliverman(
         raise HTTPException(status_code=404, detail=get_error_key("general", "not_found"))
     
     # Récupérer toutes les commandes de l'utilisateur
-    expiry_time = datetime.now() - timedelta(days=3)
+    expiry_time = datetime.now() - timedelta(days=2)
     orders = (
         db.query(Order)
-        .options(joinedload(Order.delivery_person))
         .filter(
-            Order.delivery_person_id == user.id,
             or_(
                 Order.status == OrderStatus.READY.value,
                 Order.status == OrderStatus.DELIVERING.value,
                 and_(
+                    Order.delivery_person_id == user.id,
                     Order.status != OrderStatus.READY.value,
+                    Order.status != OrderStatus.DELIVERING.value,
                     Order.updated_at >= expiry_time
                 )
             )

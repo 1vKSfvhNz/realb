@@ -36,6 +36,8 @@ class UserPreferenceProfile(Base):
         """
         Mettre à jour le profil de préférences basé sur une nouvelle commande
         """
+        if self.total_orders is None:
+            self.total_orders = 0
         # Mettre à jour le nombre total de commandes
         self.total_orders += 1
         

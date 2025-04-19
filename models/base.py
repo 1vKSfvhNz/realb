@@ -1,27 +1,20 @@
 from os import getenv
 from sqlalchemy import create_engine
-# from sqlalchemy.engine.url import URL
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from dotenv import load_dotenv
 
 # Charger les variables d'environnement
 load_dotenv()
 
-# DRIVERNAME=getenv('DRIVERNAME')
-# USERNAME=getenv('USERNAME')
-# PASSWORD=getenv('PASSWORD')
-# HOST=getenv('HOST'),
-# PORT=getenv('PORT'),
-# DATABASE=getenv('DATABASE')
-
 # ✅ 
+# from sqlalchemy.engine.url import URL
 # DATABASE_URL = URL.create(
-#     drivername=DRIVERNAME,
-#     username=USERNAME,
-#     password=PASSWORD,  # Pas besoin d'encoder ici
-#     host=HOST,
-#     port=PORT,
-#     database=DATABASE
+#     drivername='postgresql',
+#     username='postgres',
+#     password='1vKSsfvhNzsGQ0@',  # Pas besoin d'encoder ici
+#     host='localhost',
+#     port=5431,
+#     database='rb_gestion'
 # )
 
 DATABASE_URL = getenv('URL')
