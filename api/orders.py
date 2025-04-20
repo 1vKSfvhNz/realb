@@ -100,6 +100,7 @@ async def list_orders_by_deliverman(
     expiry_time = datetime.now() - timedelta(days=2)
     orders = (
         db.query(Order)
+        .options(joinedload(Order.customer))  # charge les données du client en même temps que la commande
         .filter(
             or_(
                 Order.status == OrderStatus.READY.value,
@@ -113,8 +114,8 @@ async def list_orders_by_deliverman(
             )
         )
         .all()
-    )
-    
+    )    
+
     # Préparer les réponses selon le modèle OrderResponse
     response_orders = []
     for order in orders:
@@ -130,8 +131,8 @@ async def list_orders_by_deliverman(
             id=order.id,
             order_number=order.order_number,
             customer_id=order.customer_id,
-            customer_name=user.username,
-            customer_phone=user.phone,
+            customer_name=order.customer.username,
+            customer_phone=order.customer.phone,
             product_id=order.product_id,
             product_url=image_url,
             product_name=product_name,
