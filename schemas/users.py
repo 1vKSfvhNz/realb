@@ -27,7 +27,7 @@ class UserResponse(UserBase):
     email: str
     phone: str
     role: str
-    comment: str
+    comment: Optional[str] = None
     can_add_category: bool
     can_add_banner: bool
     can_add_product: bool
