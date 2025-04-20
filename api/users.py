@@ -135,7 +135,72 @@ async def update_role(
     if user.role != 'Admin':
         raise HTTPException(status_code=403, detail=get_error_key("users", "update_role", "no_permission"))
     user_to_update = db.query(User).filter(User.id == id).first()
+    if role == 'Admin':
+        user_to_update.can_add_banner = True
+        user_to_update.can_add_category = True
+        user_to_update.can_add_product = True
+    else:
+        user_to_update.can_add_banner = False
+        user_to_update.can_add_category = False
+        user_to_update.can_add_product = False
     user_to_update.role = role
+    db.commit()
+    return {}
+
+@router.put("/update_can_add_banner/{id}/{is_active}")
+async def update_can_add_banner(
+    id: int,
+    is_active: bool,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == current_user['email']).first()
+    if user.role != 'Admin':
+        raise HTTPException(status_code=403, detail=get_error_key("users", "update_can_add_banner", "no_permission"))
+    user_to_update = db.query(User).filter(User.id == id).first()
+
+    if is_active == user_to_update.can_add_banner:
+        return {}
+
+    user_to_update.can_add_banner = is_active
+    db.commit()
+    return {}
+
+@router.put("/update_can_add_category/{id}/{is_active}")
+async def update_can_add_category(
+    id: int,
+    is_active: bool,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == current_user['email']).first()
+    if user.role != 'Admin':
+        raise HTTPException(status_code=403, detail=get_error_key("users", "update_can_add_category", "no_permission"))
+    user_to_update = db.query(User).filter(User.id == id).first()
+
+    if is_active == user_to_update.can_add_banner:
+        return {}
+
+    user_to_update.can_add_banner = is_active
+    db.commit()
+    return {}
+
+@router.put("/update_can_add_product/{id}/{is_active}")
+async def update_can_add_product(
+    id: int,
+    is_active: bool,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == current_user['email']).first()
+    if user.role != 'Admin':
+        raise HTTPException(status_code=403, detail=get_error_key("users", "update_can_add_product", "no_permission"))
+    user_to_update = db.query(User).filter(User.id == id).first()
+
+    if is_active == user_to_update.can_add_banner:
+        return {}
+
+    user_to_update.can_add_banner = is_active
     db.commit()
     return {}
 
