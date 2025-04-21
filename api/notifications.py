@@ -35,78 +35,78 @@ async def update_notification_preference(
     db.commit()
     return {"message": "Préférence de notification mise à jour", "enabled": user.notifications}
 
-@router.websocket("/ws/notifications")
-async def websocket_notifications(websocket: WebSocket, db: Session = Depends(get_db)):
-    token = websocket.query_params.get("token")
-    if not token:
-        await websocket.close(code=1008, reason="Token manquant")
-        return
+# @router.websocket("/ws/notifications")
+# async def websocket_notifications(websocket: WebSocket, db: Session = Depends(get_db)):
+#     token = websocket.query_params.get("token")
+#     if not token:
+#         await websocket.close(code=1008, reason="Token manquant")
+#         return
 
-    user_id = None  # pour éviter une erreur dans le finally
-    try:
-        user = get_current_user(token)
-        user_id = str(user["id"])  # Convertir en string pour utiliser comme clé
+#     user_id = None  # pour éviter une erreur dans le finally
+#     try:
+#         user = get_current_user(token)
+#         user_id = str(user["id"])  # Convertir en string pour utiliser comme clé
 
-        # Récupérer les informations de l'utilisateur
-        user_info = db.query(User.role, User.notifications, User.username).filter(User.id == user_id).first()
-        if not user_info:
-            await websocket.close(code=1008, reason="Utilisateur introuvable")
-            return
+#         # Récupérer les informations de l'utilisateur
+#         user_info = db.query(User.role, User.notifications, User.username).filter(User.id == user_id).first()
+#         if not user_info:
+#             await websocket.close(code=1008, reason="Utilisateur introuvable")
+#             return
 
-        role, notifications_enabled, username = user_info
+#         role, notifications_enabled, username = user_info
 
-        # Ouvrir la connexion
-        await websocket.accept()
+#         # Ouvrir la connexion
+#         await websocket.accept()
         
-        # Stocker la connexion avec les métadonnées
-        connections[user_id] = {
-            'role': role,
-            'ws': websocket,
-            'notifications_enabled': notifications_enabled,
-            'username': username
-        }
+#         # Stocker la connexion avec les métadonnées
+#         connections[user_id] = {
+#             'role': role,
+#             'ws': websocket,
+#             'notifications_enabled': notifications_enabled,
+#             'username': username
+#         }
         
-        print(f"✅ Utilisateur connecté : {user_id} ({role})")
+#         print(f"✅ Utilisateur connecté : {user_id} ({role})")
 
-        # Message de confirmation pour le client
-        await websocket.send_json({
-            "type": "connection_status",
-            "status": "connected",
-            "role": role,
-            "notifications_enabled": notifications_enabled
-        })
+#         # Message de confirmation pour le client
+#         await websocket.send_json({
+#             "type": "connection_status",
+#             "status": "connected",
+#             "role": role,
+#             "notifications_enabled": notifications_enabled
+#         })
 
-        while True:
-            # Recevoir et traiter les messages du client
-            message = await websocket.receive_json()
+#         while True:
+#             # Recevoir et traiter les messages du client
+#             message = await websocket.receive_json()
             
-            # Traiter les différents types de messages
-            if message.get("type") == "set_notification_preference":
-                # Mettre à jour la préférence dans la base de données
-                new_setting = message.get("enabled", True)
-                user_obj = db.query(User).filter(User.id == user_id).first()
-                user_obj.notifications = new_setting
-                db.commit()
+#             # Traiter les différents types de messages
+#             if message.get("type") == "set_notification_preference":
+#                 # Mettre à jour la préférence dans la base de données
+#                 new_setting = message.get("enabled", True)
+#                 user_obj = db.query(User).filter(User.id == user_id).first()
+#                 user_obj.notifications = new_setting
+#                 db.commit()
                 
-                # Mettre à jour dans notre cache
-                connections[user_id]['notifications_enabled'] = new_setting
+#                 # Mettre à jour dans notre cache
+#                 connections[user_id]['notifications_enabled'] = new_setting
                 
-                # Confirmer au client
-                await websocket.send_json({
-                    "type": "notification_preference_updated",
-                    "enabled": new_setting
-                })
+#                 # Confirmer au client
+#                 await websocket.send_json({
+#                     "type": "notification_preference_updated",
+#                     "enabled": new_setting
+#                 })
 
-    except WebSocketDisconnect:
-        print(f"🔌 Déconnexion WebSocket ({user_id})")
-    except Exception as e:
-        print(f"❌ Erreur WebSocket ({user_id}):", e)
-        await websocket.close(code=1008, reason="Erreur")
+#     except WebSocketDisconnect:
+#         print(f"🔌 Déconnexion WebSocket ({user_id})")
+#     except Exception as e:
+#         print(f"❌ Erreur WebSocket ({user_id}):", e)
+#         await websocket.close(code=1008, reason="Erreur")
 
-    finally:
-        if user_id and user_id in connections:
-            connections.pop(user_id)
-            print(f"🚫 Utilisateur déconnecté : {user_id}")
+#     finally:
+#         if user_id and user_id in connections:
+#             connections.pop(user_id)
+#             print(f"🚫 Utilisateur déconnecté : {user_id}")
 
 
 async def notify_users(
