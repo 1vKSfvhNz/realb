@@ -43,7 +43,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
         raise ValueError(f"Invalid token: {str(e)}")
 
 # Ajoutez cette fonction dans utils/security.py
-def get_current_user_from_token(token: str ) -> dict:
+def get_current_user_from_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")

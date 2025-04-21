@@ -76,21 +76,10 @@ async def create_order(
         message={
             "type": "new_order",
             "command_id": new_order.id,
-            "message": f"Nouvelle commande de {user.username} à livrer !"
+            "message": user.username
         },
         roles=["Deliver", "Admin"]  # Notifier tous les livreurs et admins
     )
-    
-    # Notification de confirmation au client
-    await notify_users(
-        message={
-            "type": "order_created",
-            "order_id": new_order.id,
-            "message": "Votre commande a été créée avec succès!"
-        },
-        user_ids=[str(user.id)]  # Notifier uniquement le client qui a créé la commande
-    )
-
     return {"message": "Commande créée", "order_id": new_order.id}
 
 @router.get("/list_orders", response_model=list[OrderResponse])
@@ -291,7 +280,7 @@ async def update_order_status(
                 "type": "order_status_update",
                 "order_id": id,
                 "status": "delivering",
-                "message": f"Votre commande est en cours de livraison par {user.username}!"
+                "message": user.username
             },
             user_ids=[str(order.customer_id)]
         )
@@ -305,7 +294,6 @@ async def update_order_status(
                 "type": "order_status_update",
                 "order_id": id,
                 "status": "delivered",
-                "message": "Votre commande a été livrée!"
             },
             user_ids=[str(order.customer_id)]
         )

@@ -40,27 +40,12 @@ app.include_router(banners.router, prefix="/api", tags=["Banners"])
 app.include_router(categories.router, prefix="/api", tags=["Categories"])
 app.include_router(orders.router, prefix="/api", tags=["Orders"])
 app.include_router(delivery_location.router, prefix="/api", tags=["Orders"])
+app.include_router(notifications.router, tags=["Notifications"])
 app.include_router(ratings.router, prefix="/api", tags=["Ratings"])
 app.include_router(recommendations.router, prefix="/api", tags=["Recommendations"])
 app.include_router(train_model.router, prefix="/api", tags=["Trainners"])
 app.include_router(localities.router, prefix="/api", tags=["Localities"])
 app.include_router(devises.router, prefix="/api", tags=["Devises"])
-
-# Important : Routes WebSocket - Montées à la racine sans préfixe /api
-app.include_router(notifications.router, tags=["Notifications"])
-
-# Route de test WebSocket simple pour le débogage
-from fastapi import WebSocket, WebSocketDisconnect
-
-@app.websocket("/ws/test")
-async def websocket_test(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        while True:
-            data = await websocket.receive_text()
-            await websocket.send_text(f"Echo: {data}")
-    except WebSocketDisconnect:
-        print("Client déconnecté du test WebSocket")
 
 # Lancer le serveur Uvicorn
 import uvicorn
