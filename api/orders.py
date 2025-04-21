@@ -8,7 +8,7 @@ from models import User, Order, get_db, OrderStatus, Product, Banner, calculate_
 from schemas.orders import *
 from utils.security import get_current_user
 from config import get_error_key, BASE_URL
-from notifications import notify_users
+from .notifications import notify_users
 
 router = APIRouter()
 
