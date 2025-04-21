@@ -178,10 +178,10 @@ async def update_can_add_category(
         raise HTTPException(status_code=403, detail=get_error_key("users", "update_can_add_category", "no_permission"))
     user_to_update = db.query(User).filter(User.id == id).first()
 
-    if is_active == user_to_update.can_add_banner:
+    if is_active == user_to_update.can_add_category:
         return {}
 
-    user_to_update.can_add_banner = is_active
+    user_to_update.can_add_category = is_active
     db.commit()
     return {}
 
@@ -197,10 +197,10 @@ async def update_can_add_product(
         raise HTTPException(status_code=403, detail=get_error_key("users", "update_can_add_product", "no_permission"))
     user_to_update = db.query(User).filter(User.id == id).first()
 
-    if is_active == user_to_update.can_add_banner:
+    if is_active == user_to_update.can_add_product:
         return {}
 
-    user_to_update.can_add_banner = is_active
+    user_to_update.can_add_product = is_active
     db.commit()
     return {}
 
