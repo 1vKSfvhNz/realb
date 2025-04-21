@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from sqlalchemy.orm import Session
 from models import User, get_db
 from typing import Dict, List
-from utils.security import get_current_user
+from utils.security import get_current_user_from_token
 from config import get_error_key
 
 # Séparation en deux routeurs distincts
@@ -14,7 +14,7 @@ connections: Dict[str, Dict] = {}
 # Routes REST avec le préfixe /api
 @router.get("/notification_preference")
 async def get_notification_preference(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.email == current_user['email']).first()
@@ -26,7 +26,7 @@ async def get_notification_preference(
 
 @router.post("/notification_preference")
 async def update_notification_preference(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.email == current_user['email']).first()
@@ -53,7 +53,7 @@ async def websocket_notifications(websocket: WebSocket, db: Session = Depends(ge
         # Ajouter des logs pour le débogage
         print(f"🔄 Vérification du token: {token[:10]}...")
         
-        user = get_current_user(token)
+        user = get_current_user_from_token(token)
         user_id = str(user["id"])  # Convertir en string pour utiliser comme clé
         
         print(f"✅ Token valide pour l'utilisateur: {user_id}")
