@@ -1,4 +1,4 @@
-from api import auth, users, products, banners, categories, orders, delivery_location, ratings, recommendations, localities, devises, train_model
+from api import auth, users, products, banners, categories, orders, delivery_location, notifications, ratings, recommendations, localities, devises, train_model
 
 __all__ = [
     "auth",
@@ -8,6 +8,7 @@ __all__ = [
     "categories",
     "orders",
     "delivery_location",
+    "notifications",
     "ratings",
     "recommendations",
     "localities",

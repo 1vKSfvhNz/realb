@@ -2,13 +2,96 @@ from fastapi import APIRouter, Depends, HTTPException
 from geopy.distance import geodesic
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, joinedload
+from datetime import datetime
 
 from models import User, Order, get_db, OrderStatus, Product, Banner, calculate_default_price, estimate_delivery_time, timedelta
 from schemas.orders import *
 from utils.security import get_current_user
 from config import get_error_key, BASE_URL
+from notifications import notify_users
 
 router = APIRouter()
+
+@router.post("/create_order")
+async def create_order(
+    order_data: OrderCreate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == current_user["email"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
+
+    product = db.query(Product).filter(Product.id == order_data.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail=get_error_key("products", "not_found"))
+
+    # Vérifier le stock
+    if product.stock is not None and product.stock < order_data.quantity:
+        raise HTTPException(status_code=400, detail=get_error_key("orders", "create", "insufficient_stock"))
+
+    old_order = db.query(Order.id).filter(
+        Order.customer_id == user.id,
+        Order.status == OrderStatus.READY.value
+    ).first()
+
+    distance = geodesic(
+        (order_data.latitude, order_data.longitude),
+        (product.latitude, product.longitude)
+    ).kilometers
+
+    delivery_price = calculate_default_price(
+        old_order,
+        distance,
+        product.price * order_data.quantity,
+        product.currency
+    )
+
+    new_order = Order(
+        customer=user,
+        latitude=float(order_data.latitude),
+        longitude=float(order_data.longitude),
+        accuracy=float(order_data.accuracy),
+        delivery_notes=order_data.delivery_notes,
+        payment_method=order_data.payment_method.value,
+        status=OrderStatus.READY.value,
+        delivery_fee=delivery_price,
+        tax=0,
+        product=product,
+        quantity=order_data.quantity,
+    )
+
+    new_order.save_order(db)
+
+    # Met à jour le stock
+    if product.stock is not None:
+        product.stock -= order_data.quantity
+        db.commit()
+
+    # Calcul des variables ML
+    new_order.calculate_ml_features(db)
+
+    # ✅ Notification aux livreurs connectés
+    await notify_users(
+        message={
+            "type": "new_order",
+            "command_id": new_order.id,
+            "message": f"Nouvelle commande de {user.username} à livrer !"
+        },
+        roles=["Deliver", "Admin"]  # Notifier tous les livreurs et admins
+    )
+    
+    # Notification de confirmation au client
+    await notify_users(
+        message={
+            "type": "order_created",
+            "order_id": new_order.id,
+            "message": "Votre commande a été créée avec succès!"
+        },
+        user_ids=[str(user.id)]  # Notifier uniquement le client qui a créé la commande
+    )
+
+    return {"message": "Commande créée", "order_id": new_order.id}
 
 @router.get("/list_orders", response_model=list[OrderResponse])
 async def list_orders(
@@ -43,7 +126,8 @@ async def list_orders(
     for order in orders:
         result = db.query(Product.image_url, Product.name, Product.currency).filter(Product.id == order.product_id).first()
         if not result:
-            HTTPException()
+            raise HTTPException(status_code=404, detail=get_error_key("products", "not_found"))
+        
         image_url = BASE_URL + result.image_url if result else None
         product_name = result.name if result else None 
         currency = result.currency if result else None 
@@ -81,7 +165,6 @@ async def list_orders(
             delivery_person_id=order.delivery_person_id,
             delivery_person_name=order.delivery_person.username if order.delivery_person else '',
             delivery_person_phone=order.delivery_person.phone if order.delivery_person else ''
-
         )
         response_orders.append(order_response)
     
@@ -93,7 +176,7 @@ async def list_orders_by_deliverman(
     db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.email == current_user['email']).first()
-    if not user or (user.role != 'Admin' and user.role != 'Livreur'):
+    if not user or (user.role != 'Admin' and user.role != 'Deliver'):
         raise HTTPException(status_code=404, detail=get_error_key("general", "not_found"))
     
     # Récupérer toutes les commandes de l'utilisateur
@@ -121,7 +204,8 @@ async def list_orders_by_deliverman(
     for order in orders:
         result = db.query(Product.image_url, Product.name, Product.currency).filter(Product.id == order.product_id).first()
         if not result:
-            HTTPException()
+            raise HTTPException(status_code=404, detail=get_error_key("products", "not_found"))
+        
         image_url = BASE_URL + result.image_url if result else None
         product_name = result.name if result else None 
         currency = result.currency if result else None 
@@ -171,9 +255,13 @@ async def cancel_order(
     if not user:
         raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
 
-    # Récupérer toutes les commandes de l'utilisateur
+    # Récupérer la commande
     order = db.query(Order).filter(Order.id == id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail=get_error_key("orders", "not_found"))
+    
     order.cancel_order(db)
+        
     return True
 
 @router.post("/update_order_status/{id}")
@@ -186,12 +274,42 @@ async def update_order_status(
     if not user or (user.role != 'Admin' and user.role != 'Livreur'):
         raise HTTPException(status_code=404, detail=get_error_key("general", "not_found"))
 
-    # Récupérer toutes les commandes de l'utilisateur
+    # Récupérer la commande
     order = db.query(Order).filter(Order.id == id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail=get_error_key("orders", "not_found"))
+    
+    # Statut initial pour déterminer le changement
+    previous_status = order.status
+    
     if order.status == OrderStatus.READY.value:  # Note: compare with value
         order.start_delivery(user.id, db)
+        
+        # Notifier le client que sa commande est en cours de livraison
+        await notify_users(
+            message={
+                "type": "order_status_update",
+                "order_id": id,
+                "status": "delivering",
+                "message": f"Votre commande est en cours de livraison par {user.username}!"
+            },
+            user_ids=[str(order.customer_id)]
+        )
+        
     elif order.status == OrderStatus.DELIVERING.value:
         order.mark_as_delivered(db)
+        
+        # Notifier le client que sa commande a été livrée
+        await notify_users(
+            message={
+                "type": "order_status_update",
+                "order_id": id,
+                "status": "delivered",
+                "message": "Votre commande a été livrée!"
+            },
+            user_ids=[str(order.customer_id)]
+        )
+    
     return True
 
 
@@ -246,60 +364,3 @@ async def deliver_order_sum(
         estimated_time=estimated_time,
         distance=round(distance, 1),
     )
-
-# Route pour créer une nouvelle commande
-@router.post("/create_order")
-async def create_order(
-    order_data: OrderCreate,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    user = db.query(User).filter(User.email == current_user['email']).first()
-    if not user:
-        raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
-    
-    # Vérifier que le produit existe
-    product = db.query(Product).filter(Product.id == order_data.product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail=get_error_key("products", "not_found"))
-
-    old_order = db.query(Order.id).filter(Order.customer_id == user.id, Order.status == OrderStatus.READY.value).first()
-
-    # Vérifier le stock disponible
-    if product.stock is not None and product.stock < order_data.quantity:
-        raise HTTPException(status_code=400, detail=get_error_key("orders", "create", "insufficient_stock"))
-    
-    # Calculer la distance en kilomètres
-    distance = geodesic((order_data.latitude, order_data.longitude), (product.latitude, product.longitude)).kilometers
-    delivery_price = calculate_default_price(old_order, distance, product.price * order_data.quantity, product.currency)
-
-    # Création de la commande avec le modèle fusionné
-    new_order = Order(
-        customer=user,
-        latitude=float(order_data.latitude),
-        longitude=float(order_data.longitude),
-        accuracy=float(order_data.accuracy),
-        delivery_notes=order_data.delivery_notes,
-        payment_method=order_data.payment_method.value,
-        status=OrderStatus.READY.value,
-        delivery_fee=delivery_price,
-        tax=0,
-        
-        # Infos du produit (juste l’ID, les autres sont dispo via .product)
-        product=product,
-        quantity=order_data.quantity,
-    )
-    
-    # Sauvegarder la commande et générer un numéro de commande
-    # Cela calculera également les totaux (subtotal, total_amount, etc.)
-    new_order.save_order(db)
-    
-    # Mettre à jour le stock du produit
-    if product.stock is not None:
-        product.stock -= order_data.quantity
-        db.commit()
-    
-    # Calculer les caractéristiques ML
-    new_order.calculate_ml_features(db)
-    
-    return {}
