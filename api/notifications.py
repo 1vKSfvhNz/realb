@@ -37,26 +37,33 @@ async def update_notification_preference(
 
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket, db: Session = Depends(get_db)):
+    # D'abord accepter la connexion avant toute vérification
+    await websocket.accept()
+    
     token = websocket.query_params.get("token")
     if not token:
+        print("❌ Token manquant")
         await websocket.close(code=1008, reason="Token manquant")
         return
 
     user_id = None  # pour éviter une erreur dans le finally
     try:
+        # Ajouter des logs pour le débogage
+        print(f"🔄 Vérification du token: {token[:10]}...")
+        
         user = get_current_user(token)
         user_id = str(user["id"])  # Convertir en string pour utiliser comme clé
+        
+        print(f"✅ Token valide pour l'utilisateur: {user_id}")
 
         # Récupérer les informations de l'utilisateur
         user_info = db.query(User.role, User.notifications, User.username).filter(User.id == user_id).first()
         if not user_info:
+            print(f"❌ Utilisateur {user_id} introuvable dans la base de données")
             await websocket.close(code=1008, reason="Utilisateur introuvable")
             return
 
         role, notifications_enabled, username = user_info
-
-        # Ouvrir la connexion
-        await websocket.accept()
         
         # Stocker la connexion avec les métadonnées
         connections[user_id] = {
@@ -100,14 +107,17 @@ async def websocket_notifications(websocket: WebSocket, db: Session = Depends(ge
     except WebSocketDisconnect:
         print(f"🔌 Déconnexion WebSocket ({user_id})")
     except Exception as e:
-        print(f"❌ Erreur WebSocket ({user_id}):", e)
-        await websocket.close(code=1008, reason="Erreur")
+        print(f"❌ Erreur WebSocket ({user_id if user_id else 'inconnu'}):", str(e))
+        try:
+            await websocket.close(code=1008, reason=f"Erreur: {str(e)[:50]}")
+        except:
+            # Ignorer les erreurs lors de la fermeture
+            pass
 
     finally:
         if user_id and user_id in connections:
             connections.pop(user_id)
             print(f"🚫 Utilisateur déconnecté : {user_id}")
-
 
 async def notify_users(
     message: dict, 

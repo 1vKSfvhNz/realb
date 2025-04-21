@@ -28,19 +28,19 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# ✅ Fonction pour vérifier l'authentification
-def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+# Ajoutez cette fonction dans utils/security.py
+def get_current_user(token: str) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         id: str = payload.get("id")
         if email is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+            raise ValueError("Invalid token - missing sub claim")
         return {"email": email, "id": id}
     except ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
-    except PyJWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise ValueError("Token expired")
+    except PyJWTError as e:
+        raise ValueError(f"Invalid token: {str(e)}")
 
 # ✅ 
 def gen_passw(init: str='', length: int=16) -> str:
