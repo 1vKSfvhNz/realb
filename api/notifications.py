@@ -6,14 +6,13 @@ from utils.security import get_current_user
 from config import get_error_key
 
 # Séparation en deux routeurs distincts
-rest_router = APIRouter()
-ws_router = APIRouter()
+router = APIRouter()
 
 # Structure pour stocker les connexions: {user_id: {'role': '...', 'ws': websocket}}
 connections: Dict[str, Dict] = {}
 
 # Routes REST avec le préfixe /api
-@rest_router.get("/notification_preference")
+@router.get("/notification_preference")
 async def get_notification_preference(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -25,7 +24,7 @@ async def get_notification_preference(
     # Retourner la préférence actuelle (vrai par défaut)
     return {"enabled": user.notifications}
 
-@rest_router.post("/notification_preference")
+@router.post("/notification_preference")
 async def update_notification_preference(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -38,8 +37,7 @@ async def update_notification_preference(
     db.commit()
     return {"message": "Préférence de notification mise à jour", "enabled": user.notifications}
 
-# Route WebSocket sans préfixe
-@ws_router.websocket("/ws/notifications")
+@router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket, db: Session = Depends(get_db)):
     # D'abord accepter la connexion avant toute vérification
     await websocket.accept()
