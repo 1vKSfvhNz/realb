@@ -2,6 +2,7 @@ from os.path import abspath, dirname, join
 from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from lifespan import lifespan
 
@@ -17,6 +18,7 @@ app = FastAPI(lifespan=lifespan)
 BASE_DIR = dirname(abspath(__file__))
 UPLOADS_DIR = join(BASE_DIR, "uploads")
 STATIC_DIR = join(BASE_DIR, "static")
+TEMPLATES_DIR = join(BASE_DIR, "templates")
 
 # Montage des fichiers statiques
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
@@ -46,6 +48,20 @@ app.include_router(recommendations.router, prefix="/api", tags=["Recommendations
 app.include_router(train_model.router, prefix="/api", tags=["Trainners"])
 app.include_router(localities.router, prefix="/api", tags=["Localities"])
 app.include_router(devises.router, prefix="/api", tags=["Devises"])
+
+@app.get("/privacy-policy", response_class=HTMLResponse)
+async def read_root():
+    html_path = join(TEMPLATES_DIR, "privacy-policy.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+    return HTMLResponse(content=html_content)
+
+@app.get("/terms-of-service", response_class=HTMLResponse)
+async def read_root():
+    html_path = join(TEMPLATES_DIR, "terms-of-service.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+    return HTMLResponse(content=html_content)
 
 # Lancer le serveur Uvicorn
 import uvicorn
