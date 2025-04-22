@@ -22,10 +22,6 @@ class Banner(Base):
     until = Column(DateTime, nullable=False)  # Toujours stocké en UTC
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))  # Toujours stocké en UTC
 
-    color_start = Column(String(16), nullable=False)  
-    color_end = Column(String(16), nullable=False)
-
-
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     owner = relationship("User", back_populates="banners")
     products = relationship("Product", back_populates="banner", cascade="all, delete")

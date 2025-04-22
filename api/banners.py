@@ -90,8 +90,6 @@ async def create_banner(
     title: str = Form(...),
     subtitle: str = Form(...),
     discount_percent: int = Form(0),
-    color_start: str = Form(default="#FFFFFF"),
-    color_end: str = Form(default="#FFFFFF"),
     until: datetime = Form(...),
     is_active: bool = Form(default=True),
     is_new: bool = Form(default=True),
@@ -119,9 +117,7 @@ async def create_banner(
         image_url=filename[:5],
         title=title,
         subtitle=subtitle,
-        color_start=color_start,
         discountPercent=discount_percent,
-        color_end=color_end,
         until=until,
         is_active=is_active,
         is_new=is_new,
@@ -145,8 +141,6 @@ async def update_banner(
     title: str = Form(...),
     subtitle: str = Form(...),
     discount_percent: int = Form(0),
-    color_start: str = Form(default="#FFFFFF"),
-    color_end: str = Form(default="#FFFFFF"),
     until: str = Form(...),
     is_active: bool = Form(default=True),
     is_new: bool = Form(default=True),
@@ -189,8 +183,6 @@ async def update_banner(
     db_banner.title = title
     db_banner.subtitle = subtitle
     db_banner.discountPercent = discount_percent
-    db_banner.color_start = color_start
-    db_banner.color_end = color_end
     db_banner.is_active = is_active
     db_banner.is_new = is_new
     db_banner.until = until_datetime
