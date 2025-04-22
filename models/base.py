@@ -19,7 +19,13 @@ load_dotenv()
 
 DATABASE_URL = getenv('URL')
 # Connexion à la base de données
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL, 
+    pool_size=20,           # Augmentez depuis 5
+    max_overflow=20,        # Augmentez depuis 10
+    pool_timeout=60,        # Augmentez le timeout de 30 à 60 secondes
+    pool_pre_ping=True      # Vérifiez que les connexions sont valides avant utilisation
+)
 try:
     with engine.connect() as conn:
         print("✅ Connexion réussie à la base de données")
