@@ -135,14 +135,10 @@ async def update_role(
     if user.role != 'Admin':
         raise HTTPException(status_code=403, detail=get_error_key("users", "update_role", "no_permission"))
     user_to_update = db.query(User).filter(User.id == id).first()
-    if role == 'Admin':
+    if role.lower() == 'admin':
         user_to_update.can_add_banner = True
         user_to_update.can_add_category = True
         user_to_update.can_add_product = True
-    else:
-        user_to_update.can_add_banner = False
-        user_to_update.can_add_category = False
-        user_to_update.can_add_product = False
     user_to_update.role = role
     db.commit()
     return {}

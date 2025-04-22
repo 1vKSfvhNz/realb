@@ -267,10 +267,7 @@ async def update_order_status(
     order = db.query(Order).filter(Order.id == id).first()
     if not order:
         raise HTTPException(status_code=404, detail=get_error_key("orders", "not_found"))
-    
-    # Statut initial pour déterminer le changement
-    previous_status = order.status
-    
+        
     if order.status == OrderStatus.READY.value:  # Note: compare with value
         order.start_delivery(user.id, db)
         
