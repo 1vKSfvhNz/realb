@@ -78,7 +78,7 @@ async def create_order(
             "command_id": new_order.id,
             "message": user.username
         },
-        roles=["Deliver", "Admin"]  # Notifier tous les livreurs et admins
+        roles=["deliver", "admin"]  # Notifier tous les livreurs et admins
     )
     return {"message": "Commande créée", "order_id": new_order.id}
 

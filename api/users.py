@@ -71,7 +71,6 @@ async def user_list(
             user.can_add_product = True
 
     db.commit()
-    
     # Retourner les produits avec les informations de pagination
     return {
         "users": users,

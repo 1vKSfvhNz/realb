@@ -144,7 +144,7 @@ async def notify_users(
     # Filtrer par rôle
     if roles:
         for user_id, info in connections.items():
-            if info['role'] in roles:
+            if info['role'].lower() in roles:
                 target_users.add(user_id)
     
     # Ajouter les IDs spécifiques
@@ -192,7 +192,7 @@ def get_livreurs():
     """
     result = {}
     for user_id, info in connections.items():
-        if info['role'] == 'Deliver' or info['role'] == 'Livreur':
+        if info['role'].lower() == 'deliver':
             result[user_id] = info['ws']
     return result
 
