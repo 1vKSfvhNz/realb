@@ -65,7 +65,7 @@ async def user_list(
 
     users = query.all()
     for user in users:
-        if user.role == 'Admin':
+        if user.role.lower() == 'admin':
             user.can_add_banner = True
             user.can_add_category = True
             user.can_add_product = True
