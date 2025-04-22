@@ -9,8 +9,6 @@ class BannerResponse(BaseModel):
     is_new: bool = Field(..., alias="isNew")
     is_active: bool = Field(..., alias="isActive")
     until: datetime
-    color_start: str = Field(..., alias="colorStart")
-    color_end: str = Field(..., alias="colorEnd")
 
     class Config:
         from_attributes = True
