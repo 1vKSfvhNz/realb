@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from models import User, get_db
+from models import User, get_db, SessionLocal
 from typing import Dict, List
 from utils.security import get_current_user_from_token
 from config import get_error_key
@@ -17,28 +17,36 @@ async def get_notification_preference(
     current_user: dict = Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.email == current_user['email']).first()
-    if not user:
-        raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
-    
-    # Retourner la préférence actuelle (vrai par défaut)
-    return {"enabled": user.notifications}
+    try:
+        user = db.query(User).filter(User.email == current_user['email']).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
+        
+        # Retourner la préférence actuelle (vrai par défaut)
+        return {"enabled": user.notifications}
+    except Exception as e:
+        db.rollback()
+        raise e
 
 @router.post("/notification_preference")
 async def update_notification_preference(
     current_user: dict = Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.email == current_user['email']).first()
-    if not user:
-        raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
-    
-    user.notifications = not user.notifications
-    db.commit()
-    return {"message": "Préférence de notification mise à jour", "enabled": user.notifications}
+    try:
+        user = db.query(User).filter(User.email == current_user['email']).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
+        
+        user.notifications = not user.notifications
+        db.commit()
+        return {"message": "Préférence de notification mise à jour", "enabled": user.notifications}
+    except Exception as e:
+        db.rollback()
+        raise e
 
 @router.websocket("/ws/notifications")
-async def websocket_notifications(websocket: WebSocket, db: Session = Depends(get_db)):
+async def websocket_notifications(websocket: WebSocket):
     # D'abord accepter la connexion avant toute vérification
     await websocket.accept()
     
@@ -49,6 +57,8 @@ async def websocket_notifications(websocket: WebSocket, db: Session = Depends(ge
         return
 
     user_id = None  # pour éviter une erreur dans le finally
+    db = None  # Initialiser db à None pour pouvoir le fermer en toute sécurité
+    
     try:
         # Ajouter des logs pour le débogage
         print(f"🔄 Vérification du token: {token[:10]}...")
@@ -58,6 +68,9 @@ async def websocket_notifications(websocket: WebSocket, db: Session = Depends(ge
         
         print(f"✅ Token valide pour l'utilisateur: {user_id}")
 
+        # Créer une session DB dédiée pour ce websocket
+        db = SessionLocal()
+        
         # Récupérer les informations de l'utilisateur
         user_info = db.query(User.role, User.notifications, User.username).filter(User.id == user_id).first()
         if not user_info:
@@ -110,6 +123,8 @@ async def websocket_notifications(websocket: WebSocket, db: Session = Depends(ge
         print(f"🔌 Déconnexion WebSocket ({user_id})")
     except Exception as e:
         print(f"❌ Erreur WebSocket ({user_id if user_id else 'inconnu'}):", str(e))
+        if db:
+            db.rollback()  # Annuler toute transaction en cours
         try:
             await websocket.close(code=1008, reason=f"Erreur: {str(e)[:50]}")
         except:
@@ -117,6 +132,10 @@ async def websocket_notifications(websocket: WebSocket, db: Session = Depends(ge
             pass
 
     finally:
+        # Fermer la connexion à la base de données si elle existe
+        if db:
+            db.close()
+            
         if user_id and user_id in connections:
             connections.pop(user_id)
             print(f"🚫 Utilisateur déconnecté : {user_id}")
@@ -144,7 +163,7 @@ async def notify_users(
     # Filtrer par rôle
     if roles:
         for user_id, info in connections.items():
-            if info['role'].lower() in roles:
+            if info['role'].lower() in [r.lower() for r in roles]:
                 target_users.add(user_id)
     
     # Ajouter les IDs spécifiques
