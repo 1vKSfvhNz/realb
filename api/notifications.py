@@ -80,6 +80,8 @@ async def websocket_notifications(websocket: WebSocket):
 
         role, notifications_enabled, username = user_info
         
+        print(user_info)
+
         # Stocker la connexion avec les métadonnées
         connections[user_id] = {
             'role': role,
