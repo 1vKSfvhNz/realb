@@ -1,10 +1,11 @@
 import os, shutil
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Form
-from sqlalchemy import func, or_, and_
+from sqlalchemy import func, or_, and_, desc
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.expression import true
 
-from models import Banner, Product, User, order_products, get_db, save_to_db, delete_from_db
+from models import Banner, Product, User, get_db, save_to_db, delete_from_db, order_products
 from schemas import ProductResponse, ProductsResponse, Optional
 from utils.security import get_current_user
 from config import *
@@ -92,6 +93,120 @@ async def products(
         }
     }
 
+@router.get("/api/popular-products", response_model=ProductsResponse)
+async def get_fallback_recommendations(
+    page: int = Query(1, alias="page", ge=1),
+    limit: int = Query(6, alias="limit", ge=1, le=20),
+    db: Session = Depends(get_db)
+):
+    """
+    Obtient une liste des produits les plus populaires (accessible sans authentification)
+    Utilisé comme solution de repli quand les recommandations personnalisées ne sont pas disponibles
+    """
+    try:
+        # Requête de base pour les produits populaires basée sur les commandes
+        # N'inclure que les produits disponibles (stock > 0 ou stock illimité)
+        stock_filter = Product.stock.is_(None) | (Product.stock > 0)
+        
+        popular_by_orders = db.query(
+            Product,
+            func.count(order_products.c.order_id).label('order_count')
+        ).join(
+            order_products, 
+            Product.id == order_products.c.product_id
+        ).filter(stock_filter).group_by(Product.id)
+        
+        # Si aucun produit n'a été commandé, utiliser les produits avec les meilleures évaluations
+        if popular_by_orders.first() is None:
+            base_query = db.query(Product).filter(
+                and_(
+                    Product.rating > 0,
+                    stock_filter
+                )
+            ).order_by(
+                desc(Product.rating),
+                desc(Product.nb_rating)
+            )
+        else:
+            # Sinon utiliser les produits les plus commandés
+            base_query = popular_by_orders.order_by(
+                desc('order_count')
+            ).with_entities(Product)
+        
+        # Compter le nombre total de produits pour la pagination
+        total_items = base_query.count()
+        
+        # Gérer le cas où il n'y a aucun produit
+        if total_items == 0:
+            # Essayer d'abord les produits en promotion
+            promo_query = db.query(Product).join(
+                Banner, 
+                and_(
+                    Product.banner_id == Banner.id,
+                    Banner.discountPercent > 0,
+                    Banner.isActive == true()
+                )
+            ).filter(stock_filter).order_by(desc(Banner.discountPercent))
+            
+            if promo_query.count() > 0:
+                base_query = promo_query
+                total_items = base_query.count()
+            else:
+                # Sinon retourner tous les produits disponibles triés par date
+                base_query = db.query(Product).filter(stock_filter).order_by(desc(Product.created_at))
+                total_items = base_query.count()
+            
+            # S'il n'y a vraiment aucun produit, retourner une liste vide
+            if total_items == 0:
+                return {
+                    "products": [],
+                    "pagination": {
+                        "currentPage": page,
+                        "totalPages": 0,
+                        "totalItems": 0,
+                        "itemsPerPage": limit
+                    }
+                }
+        
+        total_pages = (total_items + limit - 1) // limit
+        
+        # Gérer les problèmes de pagination
+        current_page = min(page, total_pages) if total_pages > 0 else 1
+        
+        # Appliquer la pagination
+        offset = (current_page - 1) * limit
+        products = base_query.offset(offset).limit(limit).all()
+        
+        # Ajouter l'URL de base aux images
+        for product in products:
+            if product.image_url and not product.image_url.startswith(('http://', 'https://')):
+                product.image_url = BASE_URL + product.image_url
+        
+        # Créer la réponse au format attendu
+        return {
+            "products": products,
+            "pagination": {
+                "currentPage": current_page,
+                "totalPages": total_pages,
+                "totalItems": total_items,
+                "itemsPerPage": limit
+            }
+        }
+    except Exception as e:
+        # Journaliser l'erreur avec plus de détails
+        error(f"Erreur lors de la récupération des produits populaires: {str(e)}", exc_info=True)
+        
+        # Retourner une liste vide avec pagination correcte
+        return {
+            "products": [],
+            "pagination": {
+                "currentPage": page,
+                "totalPages": 0,
+                "totalItems": 0,
+                "itemsPerPage": limit
+            }
+        }
+
 @router.get("/products/{id}", response_model=ProductResponse)
 async def products(
     id: int,
@@ -166,6 +281,7 @@ async def create_product(
         owner_id=user.id,  # Associer le produit au propriétaire
     )
     save_to_db(new_product, db)
+    
     # Sauvegarde du fichier
     file_location = os.path.join(upload_dir, f"{new_product.id}.{file_extension}")
     with open(file_location, "wb") as buffer:

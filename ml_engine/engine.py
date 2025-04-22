@@ -1,4 +1,4 @@
-import pandas as pd
+from pandas import DataFrame, Series
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
@@ -115,7 +115,7 @@ class UserInterestPredictor:
             "scheduler_running": self.scheduler_running
         }
     
-    def extract_user_features(self, db: Session) -> pd.DataFrame:
+    def extract_user_features(self, db: Session) -> DataFrame:
         """
         Extrait les caractéristiques des utilisateurs à partir de la base de données
         
@@ -128,7 +128,7 @@ class UserInterestPredictor:
             
             if not profiles:
                 self.logger.warning("Aucun profil utilisateur trouvé dans la base de données")
-                return pd.DataFrame()
+                return DataFrame()
             
             # Construire le DataFrame
             data = []
@@ -164,13 +164,13 @@ class UserInterestPredictor:
                     'engagement_level': engagement_level
                 })
             
-            df = pd.DataFrame(data)
+            df = DataFrame(data)
             self.logger.info(f"Extraction réussie : {len(df)} profils utilisateurs")
             return df
             
         except Exception as e:
             self.logger.error(f"Erreur lors de l'extraction des données : {e}")
-            return pd.DataFrame()  # Retourner un DataFrame vide en cas d'erreur
+            return DataFrame()  # Retourner un DataFrame vide en cas d'erreur
     
     def _calculate_engagement_level(self, profile: UserPreferenceProfile) -> str:
         """
@@ -193,8 +193,8 @@ class UserInterestPredictor:
         else:
             return 'Low'
     
-    def prepare_data(self, df: pd.DataFrame) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], 
-                                                     Optional[pd.Series], Optional[pd.Series]]:
+    def prepare_data(self, df: DataFrame) -> Tuple[Optional[DataFrame], Optional[DataFrame], 
+                                                     Optional[Series], Optional[Series]]:
         """
         Prépare les données pour l'entraînement du modèle
         
@@ -371,7 +371,7 @@ class UserInterestPredictor:
                 }
             
             # Préparer les caractéristiques pour la prédiction
-            user_features = pd.DataFrame({
+            user_features = DataFrame({
                 'total_orders': [profile.total_orders],
                 'average_order_value': [profile.average_order_value or 0],
                 'top_category': [profile.most_purchased_category_id or 0],
@@ -418,7 +418,7 @@ class UserInterestPredictor:
             # Récupérer les produits les plus populaires
             popular_products = db.query(Product).join(Order).group_by(Product.id).order_by(
                 func.count(Order.id).desc()
-            ).limit(5).all()
+            ).all()
             
             # Si aucun produit populaire n'est trouvé, utiliser les produits avec réduction
             if not popular_products:
@@ -598,6 +598,437 @@ class UserInterestPredictor:
         except Exception as e:
             self.logger.error(f"Erreur lors de la génération des recommandations : {e}")
             return self._get_fallback_recommendations(db, profile.user_id)
+    
+    def find_interested_users(self, product_id: int, db: Session, limit: int = 20) -> List[Dict]:
+        """
+        Identifie les utilisateurs susceptibles d'être intéressés par un produit spécifique
+        
+        :param product_id: ID du produit
+        :param db: Session de base de données SQLAlchemy
+        :param limit: Nombre maximum d'utilisateurs à retourner
+        :return: Liste des utilisateurs potentiellement intéressés avec leur niveau d'intérêt et raison
+        """
+        try:
+            # Vérifier si le produit existe
+            product = db.query(Product).filter(Product.id == product_id).first()
+            if not product:
+                self.logger.warning(f"Produit non trouvé avec l'ID {product_id}")
+                return []
+                
+            # Récupérer tous les profils utilisateurs
+            profiles = db.query(UserPreferenceProfile).all()
+            if not profiles:
+                self.logger.warning("Aucun profil utilisateur trouvé")
+                return []
+                
+            interested_users = []
+            
+            for profile in profiles:
+                interest_score = 0
+                reasons = []
+                
+                # Facteur 1: Le produit est dans la catégorie préférée de l'utilisateur
+                if product.category_id == profile.most_purchased_category_id:
+                    interest_score += 5
+                    reasons.append("Correspond à votre catégorie préférée")
+                
+                # Facteur 2: Le produit a un prix similaire à la valeur moyenne des commandes
+                if profile.average_order_value:
+                    price_ratio = product.price / profile.average_order_value
+                    if 0.8 <= price_ratio <= 1.2:
+                        interest_score += 3
+                        reasons.append("Prix similaire à vos achats habituels")
+                    elif price_ratio < 0.8:
+                        # Le produit est moins cher que la moyenne
+                        interest_score += 2
+                        reasons.append("Bon rapport qualité-prix par rapport à vos achats habituels")
+                
+                # Facteur 3: Le produit est similaire aux produits déjà achetés
+                if profile.preferred_product_ids:
+                    # Récupérer les produits similaires
+                    similar_products = db.query(Product).filter(
+                        Product.category_id == product.category_id,
+                        Product.id.in_(profile.preferred_product_ids)
+                    ).all()
+                    
+                    if similar_products:
+                        interest_score += 4
+                        reasons.append("Similaire à des produits que vous avez déjà achetés")
+                
+                # Facteur 4: L'heure actuelle correspond à l'heure d'achat préférée
+                current_hour = datetime.datetime.now().hour
+                if profile.preferred_purchase_time:
+                    preferred_hour_str = profile.preferred_purchase_time.split(':')[0]
+                    try:
+                        preferred_hour = int(preferred_hour_str)
+                        if abs(current_hour - preferred_hour) <= 2:  # À 2 heures près
+                            interest_score += 2
+                            reasons.append("Correspond à votre moment habituel d'achat")
+                    except ValueError:
+                        pass
+                
+                # Facteur 5: Le produit est nouveau et l'utilisateur est très engagé
+                engagement_level = self._calculate_engagement_level(profile)
+                if engagement_level == 'High':
+                    one_month_ago = datetime.datetime.now() - datetime.timedelta(days=30)
+                    if product.created_at and product.created_at >= one_month_ago:
+                        interest_score += 3
+                        reasons.append("Nouveauté susceptible de vous intéresser")
+                
+                # Facteur 6: Le produit est en promotion et l'utilisateur est peu engagé
+                if engagement_level == 'Low':
+                    banner = db.query(Banner).filter(Banner.product_id == product_id, Banner.discountPercent > 0).first()
+                    if banner:
+                        interest_score += 4
+                        reasons.append(f"En promotion avec {banner.discountPercent}% de réduction")
+                
+                # Déterminer le niveau d'intérêt global
+                interest_level = "Faible"
+                if interest_score >= 10:
+                    interest_level = "Élevé"
+                elif interest_score >= 5:
+                    interest_level = "Moyen"
+                
+                # N'ajouter l'utilisateur que s'il a un intérêt minimum
+                if interest_score >= 3:
+                    interested_users.append({
+                        'user_id': profile.user_id,
+                        'interest_score': interest_score,
+                        'interest_level': interest_level,
+                        'reasons': reasons,
+                        'engagement_level': engagement_level
+                    })
+            
+            # Trier les utilisateurs par score d'intérêt et limiter les résultats
+            sorted_users = sorted(interested_users, key=lambda x: x['interest_score'], reverse=True)[:limit]
+            
+            self.logger.info(f"Identifié {len(sorted_users)} utilisateurs potentiellement intéressés par le produit {product_id}")
+            return sorted_users
+            
+        except Exception as e:
+            self.logger.error(f"Erreur lors de la recherche d'utilisateurs intéressés : {e}")
+            return []
+    
+    def find_product_recommendations_for_user(self, user_id: int, db: Session, limit: int = 5) -> List[Product]:
+        """
+        Trouve des produits recommandés pour un utilisateur spécifique
+        
+        :param user_id: ID de l'utilisateur
+        :param db: Session de base de données SQLAlchemy
+        :param limit: Nombre maximum de produits à retourner
+        :return: Liste des objets Product recommandés
+        """
+        try:
+            # Récupérer le profil de l'utilisateur
+            profile = db.query(UserPreferenceProfile).filter(UserPreferenceProfile.user_id == user_id).first()
+            
+            if not profile:
+                self.logger.warning(f"Profil utilisateur non trouvé pour l'ID {user_id}")
+                return []
+            
+            # Déterminer le niveau d'engagement
+            engagement_level = self._calculate_engagement_level(profile)
+            
+            # Liste des IDs de produits déjà achetés pour les exclure
+            already_purchased = profile.preferred_product_ids or []
+            
+            recommended_products = []
+            
+            # Stratégie 1: Produits de la catégorie préférée
+            if profile.most_purchased_category_id:
+                category_products = db.query(Product).filter(
+                    Product.category_id == profile.most_purchased_category_id,
+                    Product.id.notin_(already_purchased)
+                ).order_by(desc(Product.rating)).limit(2).all()
+                
+                recommended_products.extend(category_products)
+            
+            # Stratégie 2: Produits basés sur le niveau d'engagement
+            if engagement_level == 'High':
+                # Produits premium
+                premium_products = db.query(Product).filter(
+                    Product.price > 100,
+                    Product.id.notin_(already_purchased + [p.id for p in recommended_products])
+                ).order_by(desc(Product.created_at)).limit(2).all()
+                
+                recommended_products.extend(premium_products)
+                
+            elif engagement_level == 'Medium':
+                # Produits populaires et bien notés
+                popular_products = db.query(Product).join(Order).group_by(Product.id).order_by(
+                    func.count(Order.id).desc()
+                ).filter(
+                    Product.id.notin_(already_purchased + [p.id for p in recommended_products])
+                ).limit(2).all()
+                
+                recommended_products.extend(popular_products)
+                
+            else:  # Low
+                # Produits en promotion
+                discount_products = db.query(Product).join(Banner).filter(
+                    Banner.discountPercent > 0,
+                    Product.id.notin_(already_purchased + [p.id for p in recommended_products])
+                ).order_by(desc(Banner.discountPercent)).limit(2).all()
+                
+                recommended_products.extend(discount_products)
+            
+            # Si nous n'avons pas assez de produits, ajouter des produits généraux
+            if len(recommended_products) < limit:
+                remaining = limit - len(recommended_products)
+                additional_products = db.query(Product).filter(
+                    Product.id.notin_(already_purchased + [p.id for p in recommended_products])
+                ).order_by(func.random()).limit(remaining).all()
+                
+                recommended_products.extend(additional_products)
+            
+            # Limiter le nombre total de produits retournés
+            return recommended_products[:limit]
+            
+        except Exception as e:
+            self.logger.error(f"Erreur lors de la recherche de produits recommandés : {e}")
+            return []
+    
+    def get_trending_products(self, db: Session, category_id: int = None, limit: int = 5) -> List[Product]:
+        """
+        Obtient les produits tendance basés sur les commandes récentes
+        
+        :param db: Session de base de données SQLAlchemy
+        :param category_id: ID de catégorie optionnel pour filtrer les résultats
+        :param limit: Nombre maximum de produits à retourner
+        :return: Liste des objets Product tendance
+        """
+        try:
+            # Définir la période "récente" (30 derniers jours)
+            recent_period = datetime.datetime.now() - datetime.timedelta(days=30)
+            
+            # Requête de base pour les produits tendance
+            query = db.query(Product).join(Order).filter(Order.created_at >= recent_period)
+            
+            # Filtrer par catégorie si spécifié
+            if category_id is not None:
+                query = query.filter(Product.category_id == category_id)
+            
+            # Grouper par produit, compter les commandes et trier
+            trending_products = query.group_by(Product.id).order_by(
+                func.count(Order.id).desc()
+            ).limit(limit).all()
+            
+            # Si pas assez de produits trouvés, compléter avec des produits bien notés
+            if len(trending_products) < limit:
+                remaining = limit - len(trending_products)
+                
+                # Construire la requête pour les produits bien notés
+                rated_query = db.query(Product).filter(
+                    Product.id.notin_([p.id for p in trending_products])
+                ).order_by(desc(Product.rating), desc(Product.nb_rating))
+                
+                # Filtrer par catégorie si spécifié
+                if category_id is not None:
+                    rated_query = rated_query.filter(Product.category_id == category_id)
+                
+                # Récupérer les produits bien notés
+                rated_products = rated_query.limit(remaining).all()
+                
+                # Ajouter à notre liste de produits tendance
+                trending_products.extend(rated_products)
+            
+            return trending_products
+            
+        except Exception as e:
+            self.logger.error(f"Erreur lors de la récupération des produits tendance : {e}")
+            return []
+    
+    def get_similar_products(self, product_id: int, db: Session, limit: int = 5) -> List[Product]:
+        """
+        Trouve des produits similaires à un produit donné
+        
+        :param product_id: ID du produit de référence
+        :param db: Session de base de données SQLAlchemy
+        :param limit: Nombre maximum de produits à retourner
+        :return: Liste des objets Product similaires
+        """
+        try:
+            # Récupérer le produit de référence
+            reference_product = db.query(Product).filter(Product.id == product_id).first()
+            
+            if not reference_product:
+                self.logger.warning(f"Produit de référence non trouvé avec l'ID {product_id}")
+                return []
+            
+            # Trouver des produits de la même catégorie
+            category_products = db.query(Product).filter(
+                Product.category_id == reference_product.category_id,
+                Product.id != product_id
+            ).order_by(
+                # Trier par proximité de prix et notation
+                func.abs(Product.price - reference_product.price).asc(),
+                desc(Product.rating)
+            ).limit(limit).all()
+            
+            return category_products
+            
+        except Exception as e:
+            self.logger.error(f"Erreur lors de la recherche de produits similaires : {e}")
+            return []
+    
+    def get_complementary_products(self, product_id: int, db: Session, limit: int = 3) -> List[Product]:
+        """
+        Trouve des produits complémentaires à un produit donné
+        
+        :param product_id: ID du produit de référence
+        :param db: Session de base de données SQLAlchemy
+        :param limit: Nombre maximum de produits à retourner
+        :return: Liste des objets Product complémentaires
+        """
+        try:
+            # Récupérer le produit de référence
+            reference_product = db.query(Product).filter(Product.id == product_id).first()
+            
+            if not reference_product:
+                self.logger.warning(f"Produit de référence non trouvé avec l'ID {product_id}")
+                return []
+            
+            # Trouver les commandes qui contiennent ce produit
+            orders_with_product = db.query(Order).filter(
+                Order.product_ids.contains([product_id])
+            ).all()
+            
+            if not orders_with_product:
+                # Si aucune commande trouvée, revenir à des produits complémentaires génériques
+                return self._get_generic_complementary_products(reference_product, db, limit)
+            
+            # Collecter tous les IDs des produits souvent achetés ensemble
+            complementary_product_ids = []
+            for order in orders_with_product:
+                # Prendre tous les autres produits de la commande
+                for pid in order.product_ids:
+                    if pid != product_id and pid not in complementary_product_ids:
+                        complementary_product_ids.append(pid)
+            
+            # Si aucun produit complémentaire n'est trouvé
+            if not complementary_product_ids:
+                return self._get_generic_complementary_products(reference_product, db, limit)
+            
+            # Récupérer les produits et les trier par fréquence d'achat
+            complementary_products = db.query(Product).filter(
+                Product.id.in_(complementary_product_ids)
+            ).all()
+            
+            # Trier par fréquence d'apparition dans les commandes
+            product_frequency = {}
+            for product_id in complementary_product_ids:
+                if product_id in product_frequency:
+                    product_frequency[product_id] += 1
+                else:
+                    product_frequency[product_id] = 1
+            
+            sorted_products = sorted(
+                complementary_products,
+                key=lambda p: product_frequency.get(p.id, 0),
+                reverse=True
+            )
+            
+            return sorted_products[:limit]
+            
+        except Exception as e:
+            self.logger.error(f"Erreur lors de la recherche de produits complémentaires : {e}")
+            return []
+    
+    def _get_generic_complementary_products(self, reference_product: Product, db: Session, limit: int) -> List[Product]:
+        """
+        Génère des recommandations de produits complémentaires génériques quand aucune donnée d'achat n'est disponible
+        
+        :param reference_product: Produit de référence
+        :param db: Session de base de données
+        :param limit: Nombre maximum de produits à retourner
+        :return: Liste des objets Product complémentaires génériques
+        """
+        try:
+            # Trouver des produits d'autres catégories, bien notés et à prix similaire
+            complementary_products = db.query(Product).filter(
+                Product.category_id != reference_product.category_id,
+                Product.id != reference_product.id
+            ).order_by(
+                desc(Product.rating),
+                func.abs(Product.price - reference_product.price).asc()
+            ).limit(limit).all()
+            
+            return complementary_products
+            
+        except Exception as e:
+            self.logger.error(f"Erreur lors de la génération de produits complémentaires génériques : {e}")
+            return []
+    
+    def get_seasonal_products(self, db: Session, season: str = None, limit: int = 5) -> List[Product]:
+        """
+        Obtient les produits saisonniers ou de saison
+        
+        :param db: Session de base de données SQLAlchemy
+        :param season: Saison à considérer (printemps, été, automne, hiver) ou None pour la saison actuelle
+        :param limit: Nombre maximum de produits à retourner
+        :return: Liste des objets Product saisonniers
+        """
+        try:
+            # Déterminer la saison si non spécifiée
+            if season is None:
+                month = datetime.datetime.now().month
+                if 3 <= month <= 5:
+                    season = "printemps"
+                elif 6 <= month <= 8:
+                    season = "été"
+                elif 9 <= month <= 11:
+                    season = "automne"
+                else:
+                    season = "hiver"
+            
+            # Mots-clés associés à chaque saison
+            seasonal_keywords = {
+                "printemps": ["printemps", "jardinage", "fleurs", "légumes", "frais", "pâques"],
+                "été": ["été", "plage", "vacances", "rafraîchissant", "barbecue", "piscine"],
+                "automne": ["automne", "rentrée", "halloween", "citrouille", "confort"],
+                "hiver": ["hiver", "noël", "fêtes", "chaud", "ski", "nouvel an"]
+            }
+            
+            keywords = seasonal_keywords.get(season.lower(), [])
+            
+            # Rechercher des produits saisonniers par mots-clés dans le nom ou la description
+            seasonal_products = []
+            
+            for keyword in keywords:
+                keyword_products = db.query(Product).filter(
+                    db.or_(
+                        Product.name.ilike(f"%{keyword}%"),
+                        Product.description.ilike(f"%{keyword}%")
+                    )
+                ).order_by(desc(Product.rating)).limit(limit).all()
+                
+                for product in keyword_products:
+                    if product not in seasonal_products:
+                        seasonal_products.append(product)
+                        
+                        if len(seasonal_products) >= limit:
+                            break
+                
+                if len(seasonal_products) >= limit:
+                    break
+            
+            # Si pas assez de produits trouvés par mots-clés, ajouter des produits récemment ajoutés
+            if len(seasonal_products) < limit:
+                remaining = limit - len(seasonal_products)
+                recent_period = datetime.datetime.now() - datetime.timedelta(days=60)  # Derniers 2 mois
+                
+                recent_products = db.query(Product).filter(
+                    Product.created_at >= recent_period,
+                    Product.id.notin_([p.id for p in seasonal_products])
+                ).order_by(desc(Product.created_at)).limit(remaining).all()
+                
+                seasonal_products.extend(recent_products)
+            
+            return seasonal_products
+            
+        except Exception as e:
+            self.logger.error(f"Erreur lors de la récupération des produits saisonniers : {e}")
+            return []
     
     def save_model(self, filepath=None):
         """

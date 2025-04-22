@@ -1,5 +1,5 @@
 from json import load
-from logging import basicConfig, ERROR, error
+from logging import basicConfig, ERROR, error, info
 from os import makedirs
 
 # URLs et chemins
