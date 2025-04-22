@@ -4,93 +4,279 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Politique de confidentialité - Real Black</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
     <style>
         body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+            font-family: 'Poppins', sans-serif;
         }
-        h1 {
-            color: #000;
-            text-align: center;
-            margin-bottom: 30px;
+        .bg-primary {
+            background-color: #111827;
         }
-        h2 {
-            color: #000;
-            margin-top: 30px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 10px;
+        .bg-secondary {
+            background-color: #1f2937;
         }
-        p {
-            margin-bottom: 15px;
+        .text-primary {
+            color: #f3f4f6;
         }
-        .date {
-            text-align: right;
-            font-style: italic;
-            margin-bottom: 30px;
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+            transition: all 0.3s ease;
         }
-        .footer {
-            margin-top: 50px;
-            text-align: center;
-            font-size: 0.9em;
-            color: #777;
-            border-top: 1px solid #eee;
-            padding-top: 20px;
+        .btn-primary:hover {
+            background-color: #4338ca;
         }
     </style>
 </head>
-<body>
-    <h1>Politique de confidentialité</h1>
-    <div class="date">Dernière mise à jour : 22 avril 2025</div>
-    
-    <p>Bienvenue sur Real Black. Cette politique de confidentialité vise à vous informer sur la manière dont nous collectons, utilisons et protégeons vos informations personnelles lorsque vous utilisez notre plateforme d'e-commerce.</p>
-    
-    <h2>1. Informations que nous collectons</h2>
-    <p>Nous collectons les informations personnelles suivantes :</p>
-    <ul>
-        <li>Votre position géographique</li>
-        <li>Votre numéro de téléphone</li>
-        <li>Votre adresse e-mail</li>
-    </ul>
-    <p>Ces informations sont nécessaires pour vous fournir nos services d'e-commerce, traiter vos commandes et faciliter les livraisons.</p>
-    
-    <h2>2. Utilisation de vos informations</h2>
-    <p>Nous utilisons vos informations personnelles aux fins suivantes :</p>
-    <ul>
-        <li>Traiter et livrer vos commandes</li>
-        <li>Vous contacter concernant votre compte ou vos commandes</li>
-        <li>Améliorer notre service et votre expérience d'achat</li>
-        <li>Vous envoyer des informations sur nos produits ou promotions (avec votre consentement)</li>
-        <li>Analyser les données pour personnaliser votre expérience d'achat et vous proposer des produits susceptibles de vous intéresser</li>
-    </ul>
-    
-    <h2>3. Protection de vos informations</h2>
-    <p>Nous prenons la sécurité de vos données personnelles très au sérieux. Nous avons mis en place des mesures de sécurité appropriées pour protéger vos informations contre tout accès non autorisé, altération, divulgation ou destruction.</p>
-    
-    <h2>4. Partage de vos informations</h2>
-    <p>Nous ne partageons pas vos informations personnelles avec des tiers. Vos données sont uniquement utilisées en interne pour améliorer nos services et votre expérience d'achat.</p>
-    
-    <h2>5. Cookies et technologies similaires</h2>
-    <p>Nous utilisons des cookies et des technologies similaires pour améliorer votre expérience sur notre plateforme, analyser l'utilisation de notre site et personnaliser votre expérience. Vous pouvez gérer les paramètres de cookies via votre navigateur.</p>
-    
-    <h2>6. Vos droits</h2>
-    <p>Vous avez le droit d'accéder à vos informations personnelles et de les modifier. Vous pouvez mettre à jour votre numéro de téléphone via votre compte. Veuillez noter que nous ne proposons pas actuellement la possibilité de supprimer vos données personnelles de notre système, car ces informations sont nécessaires pour le fonctionnement de notre service.</p>
-    
-    <h2>7. Conservation des données</h2>
-    <p>Nous conservons vos informations personnelles aussi longtemps que nécessaire pour vous fournir nos services et respecter nos obligations légales.</p>
-    
-    <h2>8. Modifications de cette politique</h2>
-    <p>Nous pouvons modifier cette politique de confidentialité à tout moment. Toute modification sera publiée sur cette page, et, si les modifications sont significatives, nous vous en informerons par e-mail ou via une notification sur notre application.</p>
-    
-    <h2>9. Contact</h2>
-    <p>Si vous avez des questions concernant cette politique de confidentialité ou l'utilisation de vos données personnelles, veuillez nous contacter à l'adresse suivante : [Insérer adresse email de contact].</p>
-    
-    <div class="footer">
-        <p>© 2025 Real Black. Tous droits réservés.</p>
-        <p>Opérant au Burkina Faso</p>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Navbar -->
+    <nav class="bg-primary text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <!-- Logo -->
+                    <div class="flex-shrink-0 flex items-center">
+                        <div class="w-12 h-12 flex items-center justify-center mr-3">
+                            <!-- Logo de Real Black -->
+                            <img src="/static/img/icon_b.png" alt="Real Black Logo" class="w-10 h-10">
+                        </div>
+                        <span class="text-xl font-bold">Real Black</span>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <!-- User Account -->
+                    <div class="ml-3 relative">
+                        <a href="#" class="text-primary hover:text-indigo-300">
+                            <i class="fas fa-user-circle text-xl"></i>
+                        </a>
+                    </div>
+                    <!-- Shopping Cart -->
+                    <div class="ml-4 relative">
+                        <a href="#" class="text-primary hover:text-indigo-300">
+                            <i class="fas fa-shopping-cart text-xl"></i>
+                        </a>
+                    </div>
+                    <!-- Mobile Menu Button -->
+                    <div class="ml-4 flex items-center md:hidden">
+                        <button type="button" class="bg-gray-700 rounded-md p-2 inline-flex items-center justify-center text-white hover:bg-gray-600 focus:outline-none">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Content -->
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12 bg-white my-8 shadow-md rounded-lg">
+        <h1 class="text-3xl font-bold text-gray-900 text-center mb-6">Politique de confidentialité</h1>
+        <div class="text-right text-gray-600 italic mb-8">Dernière mise à jour : 22 avril 2025</div>
+        
+        <div class="prose prose-indigo max-w-none">
+            <p class="mb-4">Bienvenue sur Real Black. Cette politique de confidentialité vise à vous informer sur la manière dont nous collectons, utilisons et protégeons vos informations personnelles lorsque vous utilisez notre plateforme d'e-commerce.</p>
+            
+            <h2 class="text-xl font-bold text-gray-900 mt-8 mb-4 pb-2 border-b border-gray-200">1. Informations que nous collectons</h2>
+            <p class="mb-2">Nous collectons les informations personnelles suivantes :</p>
+            <ul class="list-disc pl-6 mb-4">
+                <li class="mb-1">Votre position géographique</li>
+                <li class="mb-1">Votre numéro de téléphone</li>
+                <li class="mb-1">Votre adresse e-mail</li>
+            </ul>
+            <p>Ces informations sont nécessaires pour vous fournir nos services d'e-commerce, traiter vos commandes et faciliter les livraisons.</p>
+            
+            <h2 class="text-xl font-bold text-gray-900 mt-8 mb-4 pb-2 border-b border-gray-200">2. Utilisation de vos informations</h2>
+            <p class="mb-2">Nous utilisons vos informations personnelles aux fins suivantes :</p>
+            <ul class="list-disc pl-6 mb-4">
+                <li class="mb-1">Traiter et livrer vos commandes</li>
+                <li class="mb-1">Vous contacter concernant votre compte ou vos commandes</li>
+                <li class="mb-1">Améliorer notre service et votre expérience d'achat</li>
+                <li class="mb-1">Vous envoyer des informations sur nos produits ou promotions (avec votre consentement)</li>
+                <li class="mb-1">Analyser les données pour personnaliser votre expérience d'achat et vous proposer des produits susceptibles de vous intéresser</li>
+            </ul>
+            
+            <h2 class="text-xl font-bold text-gray-900 mt-8 mb-4 pb-2 border-b border-gray-200">3. Protection de vos informations</h2>
+            <p>Nous prenons la sécurité de vos données personnelles très au sérieux. Nous avons mis en place des mesures de sécurité appropriées pour protéger vos informations contre tout accès non autorisé, altération, divulgation ou destruction.</p>
+            
+            <h2 class="text-xl font-bold text-gray-900 mt-8 mb-4 pb-2 border-b border-gray-200">4. Partage de vos informations</h2>
+            <p>Nous ne partageons pas vos informations personnelles avec des tiers. Vos données sont uniquement utilisées en interne pour améliorer nos services et votre expérience d'achat.</p>
+            
+            <h2 class="text-xl font-bold text-gray-900 mt-8 mb-4 pb-2 border-b border-gray-200">5. Cookies et technologies similaires</h2>
+            <p>Nous utilisons des cookies et des technologies similaires pour améliorer votre expérience sur notre plateforme, analyser l'utilisation de notre site et personnaliser votre expérience. Vous pouvez gérer les paramètres de cookies via votre navigateur.</p>
+            
+            <h2 class="text-xl font-bold text-gray-900 mt-8 mb-4 pb-2 border-b border-gray-200">6. Vos droits</h2>
+            <p>Vous avez le droit d'accéder à vos informations personnelles et de les modifier. Vous pouvez mettre à jour votre numéro de téléphone via votre compte. Veuillez noter que nous ne proposons pas actuellement la possibilité de supprimer vos données personnelles de notre système, car ces informations sont nécessaires pour le fonctionnement de notre service.</p>
+            
+            <h2 class="text-xl font-bold text-gray-900 mt-8 mb-4 pb-2 border-b border-gray-200">7. Conservation des données</h2>
+            <p>Nous conservons vos informations personnelles aussi longtemps que nécessaire pour vous fournir nos services et respecter nos obligations légales.</p>
+            
+            <h2 class="text-xl font-bold text-gray-900 mt-8 mb-4 pb-2 border-b border-gray-200">8. Modifications de cette politique</h2>
+            <p>Nous pouvons modifier cette politique de confidentialité à tout moment. Toute modification sera publiée sur cette page, et, si les modifications sont significatives, nous vous en informerons par e-mail ou via une notification sur notre application.</p>
+            
+            <h2 class="text-xl font-bold text-gray-900 mt-8 mb-4 pb-2 border-b border-gray-200">9. Contact</h2>
+            <p>Si vous avez des questions concernant cette politique de confidentialité ou l'utilisation de vos données personnelles, veuillez nous contacter à l'adresse suivante : contact@realblack.com</p>
+        </div>
     </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white mt-8">
+        <div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <!-- Company Info -->
+                <div>
+                    <div class="flex items-center mb-4">
+                        <div class="w-10 h-10 flex items-center justify-center mr-3">
+                            <img src="/static/img/icon_b.png" alt="Real Black Logo" class="w-8 h-8">
+                        </div>
+                        <span class="text-xl font-bold">Real Black</span>
+                    </div>
+                    <p class="text-gray-400 mb-4">Votre destination exclusive pour la mode et l'artisanat africains au Burkina Faso.</p>
+                    <div class="flex space-x-4">
+                        <a href="#" class="text-gray-400 hover:text-white">
+                            <i class="fab fa-facebook-f"></i>
+                        </a>
+                        <a href="#" class="text-gray-400 hover:text-white">
+                            <i class="fab fa-twitter"></i>
+                        </a>
+                        <a href="#" class="text-gray-400 hover:text-white">
+                            <i class="fab fa-instagram"></i>
+                        </a>
+                    </div>
+                </div>
+                <!-- Quick Links -->
+                <div>
+                    <h3 class="text-lg font-bold mb-4">Liens rapides</h3>
+                    <ul class="space-y-2">
+                        <li><a href="/" class="text-gray-400 hover:text-white">Accueil</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white">Produits</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white">Catégories</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white">À propos</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white">Contact</a></li>
+                    </ul>
+                </div>
+                <!-- Legal -->
+                <div>
+                    <h3 class="text-lg font-bold mb-4">Informations légales</h3>
+                    <ul class="space-y-2">
+                        <li><a href="/terms-of-service" class="text-gray-400 hover:text-white">Conditions d'utilisation</a></li>
+                        <li><a href="/privacy-policy" class="text-gray-400 hover:text-white font-medium text-indigo-300">Politique de confidentialité</a></li>
+                    </ul>
+                </div>
+                <!-- Contact -->
+                <div>
+                    <h3 class="text-lg font-bold mb-4">Contact</h3>
+                    <ul class="space-y-2">
+                        <li class="flex items-start">
+                            <i class="fas fa-map-marker-alt text-indigo-500 mt-1 mr-3"></i>
+                            <span class="text-gray-400">Ouagadougou, Burkina Faso</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-phone-alt text-indigo-500 mt-1 mr-3"></i>
+                            <span class="text-gray-400">+226 73 46 69 82</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-envelope text-indigo-500 mt-1 mr-3"></i>
+                            <span class="text-gray-400">contact@realblack.com</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-clock text-indigo-500 mt-1 mr-3"></i>
+                            <span class="text-gray-400">Lun-Sam: 8h00 - 18h00</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="border-t border-gray-800 mt-8 pt-8">
+                <div class="flex flex-col md:flex-row justify-between items-center">
+                    <p class="text-gray-400">© 2025 Real Black. Tous droits réservés.</p>
+                    <div class="mt-4 md:mt-0">
+                        <div class="flex space-x-4">
+                            <img src="/static/img/payment-visa.png" alt="Visa" class="h-8">
+                            <img src="/static/img/payment-mastercard.png" alt="Mastercard" class="h-8">
+                            <img src="/static/img/payment-orange.png" alt="Orange Money" class="h-8">
+                            <img src="/static/img/payment-momo.png" alt="Mobile Money" class="h-8">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Mobile Menu (Hidden by default) -->
+    <div class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 z-50 overflow-y-auto" id="mobile-menu">
+        <div class="flex items-center justify-center min-h-screen">
+            <div class="bg-white w-full max-w-sm mx-auto rounded-lg shadow-lg overflow-hidden">
+                <div class="flex justify-between items-center px-4 py-3 bg-gray-100">
+                    <div class="flex items-center">
+                        <div class="w-8 h-8 flex items-center justify-center mr-2">
+                            <img src="/static/img/icon_b.png" alt="Real Black Logo" class="w-6 h-6">
+                        </div>
+                        <span class="text-lg font-bold text-gray-900">Real Black</span>
+                    </div>
+                    <button class="text-gray-500 hover:text-gray-600" id="close-mobile-menu">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                <div class="py-4">
+                    <a href="/" class="block px-4 py-3 text-lg font-medium text-gray-900 hover:bg-gray-100">Accueil</a>
+                    <a href="#" class="block px-4 py-3 text-lg font-medium text-gray-900 hover:bg-gray-100">Produits</a>
+                    <a href="#" class="block px-4 py-3 text-lg font-medium text-gray-900 hover:bg-gray-100">Catégories</a>
+                    <a href="#" class="block px-4 py-3 text-lg font-medium text-gray-900 hover:bg-gray-100">À propos</a>
+                    <a href="#" class="block px-4 py-3 text-lg font-medium text-gray-900 hover:bg-gray-100">Contact</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Back to Top Button -->
+    <button id="back-to-top" class="fixed bottom-6 right-6 bg-indigo-600 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg z-40 hover:bg-indigo-700 transition-all duration-300">
+        <i class="fas fa-chevron-up"></i>
+    </button>
+
+    <!-- Simple JavaScript for interactivity -->
+    <script>
+        // Mobile menu toggle
+        const mobileMenuButton = document.querySelector('button[type="button"]');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const closeMobileMenuButton = document.getElementById('close-mobile-menu');
+        
+        if (mobileMenuButton && mobileMenu && closeMobileMenuButton) {
+            mobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.remove('hidden');
+            });
+            
+            closeMobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.add('hidden');
+            });
+        }
+        
+        // Back to top button
+        const backToTopButton = document.getElementById('back-to-top');
+        
+        if (backToTopButton) {
+            // Initially hide the button
+            backToTopButton.style.opacity = '0';
+            backToTopButton.style.visibility = 'hidden';
+            
+            window.addEventListener('scroll', () => {
+                if (window.pageYOffset > 300) {
+                    backToTopButton.style.opacity = '1';
+                    backToTopButton.style.visibility = 'visible';
+                } else {
+                    backToTopButton.style.opacity = '0';
+                    backToTopButton.style.visibility = 'hidden';
+                }
+            });
+            
+            backToTopButton.addEventListener('click', () => {
+                window.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+            });
+        }
+    </script>
 </body>
 </html>
