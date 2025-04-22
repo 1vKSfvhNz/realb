@@ -51,4 +51,3 @@ def schedule_banner_expirations(scheduler: BackgroundScheduler, db: Session):
             replace_existing=True
         )
         print(f"[SCHEDULER] Tâche planifiée pour la bannière {banner.id} à {banner.until}")
-    db.close()
