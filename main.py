@@ -25,7 +25,7 @@ app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Ajout des middlewares à l'application
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["realb.onrender.com"])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://realb.onrender.com"],
@@ -59,6 +59,20 @@ async def read_root():
 @app.get("/terms-of-service", response_class=HTMLResponse)
 async def read_root():
     html_path = join(TEMPLATES_DIR, "terms-of-service.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+    return HTMLResponse(content=html_content)
+
+@app.get("/return-policy", response_class=HTMLResponse)
+async def read_root():
+    html_path = join(TEMPLATES_DIR, "return-policy.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+    return HTMLResponse(content=html_content)
+
+@app.get("/deliver", response_class=HTMLResponse)
+async def read_root():
+    html_path = join(TEMPLATES_DIR, "deliver.html")
     with open(html_path, "r", encoding="utf-8") as f:
         html_content = f.read()
     return HTMLResponse(content=html_content)
