@@ -290,9 +290,10 @@ async def create_product(
     # Mise à jour du chemin du fichier dans la base de données
     new_product.image_url = f"/{upload_dir.rstrip('/')}/{new_product.id}.{file_extension}"
     db.commit()
+    db.refresh(new_product)  # Pour s'assurer que les changements sont pris en compte dans la réponse
     return new_product
 
-@router.put("/update_product/{id}")
+@router.put("/update_product/{id}", response_model=ProductResponse)
 async def update_product(
     id: int,
     name: str = Form(...),
@@ -355,7 +356,8 @@ async def update_product(
     if longitude: product.longitude = longitude
     product.is_new = is_new
     db.commit()
-    return {}
+    db.refresh(product)  # Pour s'assurer que les changements sont pris en compte dans la réponse
+    return product
 
 @router.delete("/delete_product/{id}")
 async def delete_product(
