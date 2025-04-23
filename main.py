@@ -24,24 +24,14 @@ TEMPLATES_DIR = join(BASE_DIR, "templates")
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# Configuration des middlewares pour la sécurité et les accès cross-origin
-app.add_middleware(
-    TrustedHostMiddleware, 
-    allowed_hosts=["realb.onrender.com"],  # Limitez aux hôtes spécifiques en production
-)
-
+# Ajout des middlewares à l'application
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 app.add_middleware(
     CORSMiddleware,
-    # Définition précise des origines autorisées (plus sécurisé que "*")
-    allow_origins=["https://realb.onrender.com",],
+    allow_origins=["https://realb.onrender.com"],
     allow_credentials=True,
-    # Limitez aux méthodes HTTP réellement utilisées par votre API
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # OPTIONS est nécessaire pour les requêtes preflight CORS
-    # Définissez uniquement les en-têtes nécessaires pour votre application
-    allow_headers=["Content-Type",  "Authorization", "Accept", "X-Requested-With"],
-    # Exposez les en-têtes personnalisés que vos clients front-end pourraient avoir besoin
-    expose_headers=["Content-Length", "X-Total-Count"],
-    max_age=600,  # Durée de mise en cache des résultats preflight (en secondes)
+    allow_methods=["GET", "POST", "PUT", "DELETE"],  # ✅ seulement les méthodes utilisées
+    allow_headers=["*"]
 )
 
 # Inclusion des routes API
