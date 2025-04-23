@@ -1,6 +1,8 @@
-import os, shutil
+import os
+from shutil import copyfileobj, make_archive
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Form
+from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, and_, desc
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import true
@@ -11,6 +13,24 @@ from utils.security import get_current_user
 from config import *
 
 router = APIRouter()
+
+@router.get("/download/uploads")
+def download_uploads(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Vérification des permissions
+    user = db.query(User).filter(User.email == current_user['email']).first()
+    if not user or user.role.lower() != 'admin':
+        raise HTTPException(status_code=403, detail=get_error_key("products", "list", "no_permission"))
+
+    zip_path = "uploads_backup.zip"
+    uploads_dir = "uploads"
+
+    # Compresser tout le dossier uploads
+    make_archive("uploads_backup", 'zip', uploads_dir)
+
+    return FileResponse(path=zip_path, filename="uploads_backup.zip", media_type='application/zip')
 
 @router.get("/products", response_model=ProductsResponse)
 async def products(
@@ -285,7 +305,7 @@ async def create_product(
     # Sauvegarde du fichier
     file_location = os.path.join(upload_dir, f"{new_product.id}.{file_extension}")
     with open(file_location, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        copyfileobj(file.file, buffer)
     
     # Mise à jour du chemin du fichier dans la base de données
     new_product.image_url = f"/{upload_dir.rstrip('/')}/{new_product.id}.{file_extension}"
@@ -337,7 +357,7 @@ async def update_product(
         # Sauvegarde du fichier
         file_location = os.path.join(upload_dir, f"{product.id}.{file_extension}")
         with open(file_location, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            copyfileobj(file.file, buffer)
     
     discount = db.query(Banner.discountPercent).filter(Banner.id == banner_id).first()
     discount_value = discount[0] if discount else 0  # ou None, selon ton besoin

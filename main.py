@@ -31,10 +31,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://realb.onrender.com"],
     allow_credentials=True,
-    allow_methods=["*"],  # ✅ seulement les méthodes utilisées
-    allow_headers=["*"]
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "X-Requested-With", 
+        "X-CSRF-Token"
+    ]
 )
-
 
 # Inclusion des routes API
 app.include_router(auth.router, prefix="/api", tags=["Authentication"])
@@ -79,7 +84,7 @@ async def read_root():
         html_content = f.read()
     return HTMLResponse(content=html_content)
 
-@app.get("/download/uploads")
+@app.get("/download/upload")
 def download_uploads():
     zip_path = "uploads_backup.zip"
     uploads_dir = "uploads"
