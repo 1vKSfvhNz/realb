@@ -33,6 +33,6 @@ class OrderRating(Base):
     comment = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    order = relationship("Order", back_populates="ratings")
+    order = relationship("Order", back_populates="rating")
     class Config:
         orm_mode = True

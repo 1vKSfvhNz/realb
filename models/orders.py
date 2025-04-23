@@ -113,6 +113,7 @@ class Order(Base):
     # Relations
     delivery_person_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     delivery_person = relationship("User", back_populates="delivery_orders", foreign_keys=[delivery_person_id])
+    rating = relationship("OrderRating", back_populates="order", uselist=False, cascade="all, delete-orphan")
     
     # The rest of the methods remain the same
     def calculate_totals(self):
