@@ -31,15 +31,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://realb.onrender.com"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=[
-        "Content-Type",
-        "Authorization",
-        "Accept",
-        "X-Requested-With", 
-        "X-CSRF-Token"
-    ]
+    allow_methods=["*"],  # ✅ seulement les méthodes utilisées
+    allow_headers=["*"]
 )
+
 
 # Inclusion des routes API
 app.include_router(auth.router, prefix="/api", tags=["Authentication"])

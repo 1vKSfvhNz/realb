@@ -80,7 +80,7 @@ async def products(
     products = query.all()
     for product in products:
         if product.image_url:
-            product.image_url = BASE_URL + product.image_url
+            product.image_url = BASE_URL + product.image_url + '?v=2'
 
     # Retourner les produits avec les informations de pagination
     return {
@@ -179,8 +179,8 @@ async def get_fallback_recommendations(
         
         # Ajouter l'URL de base aux images
         for product in products:
-            if product.image_url and not product.image_url.startswith(('http://', 'https://')):
-                product.image_url = BASE_URL + product.image_url
+            if product.image_url:
+                product.image_url = BASE_URL + product.image_url + '?v=2'
         
         # Créer la réponse au format attendu
         return {

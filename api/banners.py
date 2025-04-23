@@ -71,7 +71,7 @@ async def banners(
     banners = query.all()
     for banner in banners:
         if banner.image_url:
-            banner.image_url = BASE_URL + banner.image_url
+            banner.image_url = BASE_URL + banner.image_url + '?v=2'
 
     return {
         "banners": banners,
