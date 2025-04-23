@@ -70,9 +70,9 @@ async def read_root():
         html_content = f.read()
     return HTMLResponse(content=html_content)
 
-@app.get("/deliver", response_class=HTMLResponse)
+@app.get("/terms-of-deliver", response_class=HTMLResponse)
 async def read_root():
-    html_path = join(TEMPLATES_DIR, "deliver.html")
+    html_path = join(TEMPLATES_DIR, "terms-of-deliver.html")
     with open(html_path, "r", encoding="utf-8") as f:
         html_content = f.read()
     return HTMLResponse(content=html_content)
