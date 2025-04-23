@@ -1,8 +1,9 @@
 from os.path import abspath, dirname, join 
+from shutil import make_archive
 from fastapi import FastAPI
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from lifespan import lifespan
 
@@ -30,8 +31,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://realb.onrender.com"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],  # ✅ seulement les méthodes utilisées
-    allow_headers=["*"]
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "X-Requested-With", 
+        "X-CSRF-Token"
+    ]
 )
 
 # Inclusion des routes API
@@ -76,6 +83,16 @@ async def read_root():
     with open(html_path, "r", encoding="utf-8") as f:
         html_content = f.read()
     return HTMLResponse(content=html_content)
+
+@app.get("/download/uploads")
+def download_uploads():
+    zip_path = "uploads_backup.zip"
+    uploads_dir = "uploads"
+
+    # Compresser tout le dossier uploads
+    make_archive("uploads_backup", 'zip', uploads_dir)
+
+    return FileResponse(path=zip_path, filename="uploads_backup.zip", media_type='application/zip')
 
 # Lancer le serveur Uvicorn
 import uvicorn
