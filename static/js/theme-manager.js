@@ -2,7 +2,7 @@
  * theme-manager.js
  * Module de gestion des thèmes (mode clair/sombre) pour Real Black
  * Créé le: 23 avril 2025
- * Corrigé le: 23 avril 2025
+ * Mise à jour: 23 avril 2025
  */
 
 (function() {
@@ -161,10 +161,10 @@
     // Appliquer le mode initial
     if (isDarkMode) {
       document.body.classList.add('dark-mode');
-      changeLogoIcons('white');
+      changeLogoIcons('dark');
     } else {
       document.body.classList.remove('dark-mode');
-      changeLogoIcons('black');
+      changeLogoIcons('light');
     }
     
     // Gérer le clic sur le bouton
@@ -172,31 +172,43 @@
       const isDarkModeNow = document.body.classList.toggle('dark-mode');
       localStorage.setItem('realblack-dark-mode', isDarkModeNow);
       
-      // Changer les logos en fonction du mode
+      // Mettre à jour les logos
       if (isDarkModeNow) {
-        changeLogoIcons('white');
+        changeLogoIcons('dark');
       } else {
-        changeLogoIcons('black');
+        changeLogoIcons('light');
       }
     });
+
+    // Vérifier si le système préfère le mode sombre par défaut (première visite)
+    if (localStorage.getItem('realblack-dark-mode') === null) {
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.body.classList.add('dark-mode');
+        localStorage.setItem('realblack-dark-mode', 'true');
+        changeLogoIcons('dark');
+      }
+    }
   }
   
   /**
    * Changer toutes les instances des icônes de logo
-   * @param {string} colorMode - Mode de couleur ('white' ou 'black')
+   * @param {string} mode - Mode actuel ('dark' ou 'light')
    */
-  function changeLogoIcons(colorMode) {
+  function changeLogoIcons(mode) {
     const logoImages = document.querySelectorAll('img[src*="icon_"]');
     
     // Déterminer le type d'icône en fonction du mode
-    const iconType = colorMode === 'white' ? 'icon_w' : 'icon_b';
+    const iconType = mode === 'dark' ? 'icon_w' : 'icon_b';
     
     logoImages.forEach(img => {
       const currentSrc = img.getAttribute('src');
-      // Remplacer le nom du fichier tout en préservant le chemin
       if (currentSrc) {
+        // Remplacer le nom du fichier tout en préservant le chemin
         const newSrc = currentSrc.replace(/icon_[bw]/, iconType);
         img.setAttribute('src', newSrc);
+        
+        // Ajout d'un paramètre aléatoire pour forcer le rechargement de l'image
+        img.setAttribute('src', newSrc + '?v=' + new Date().getTime());
       }
     });
   }
@@ -206,5 +218,22 @@
     document.addEventListener('DOMContentLoaded', initThemeManager);
   } else {
     initThemeManager();
+  }
+
+  // Listener pour les changements de préférence système
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+      if (localStorage.getItem('realblack-dark-mode') === null) {
+        const isDarkMode = e.matches;
+        if (isDarkMode) {
+          document.body.classList.add('dark-mode');
+          changeLogoIcons('dark');
+        } else {
+          document.body.classList.remove('dark-mode');
+          changeLogoIcons('light');
+        }
+        localStorage.setItem('realblack-dark-mode', isDarkMode.toString());
+      }
+    });
   }
 })();
