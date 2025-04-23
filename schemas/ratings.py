@@ -1,8 +1,7 @@
 from . import BaseModel, Field, Optional, field_validator, datetime, Pagination
 
 # Schémas Pydantic
-class ProductRatingCreate(BaseModel):
-    product_id: int
+class RatingCreate(BaseModel):
     rating: int = Field(..., ge=1, le=5)  # Note de 1 à 5
     comment: Optional[str] = None
 
@@ -11,6 +10,12 @@ class ProductRatingCreate(BaseModel):
         if not 1 <= v <= 5:
             raise ValueError('La note doit être entre 1 et 5')
         return v
+
+class OrderRatingCreate(RatingCreate):
+    order_id: int
+
+class ProductRatingCreate(RatingCreate):
+    product_id: int
 
 class UserProductRatingResponse(BaseModel):
     rating: int

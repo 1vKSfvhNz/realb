@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException
 from geopy.distance import geodesic
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 
-from models import User, Order, get_db, OrderStatus, Product, Banner, calculate_default_price, estimate_delivery_time, timedelta, SessionLocal
+from models import (User, Order, get_db, OrderStatus, Product, Banner, OrderRating, save_to_db,
+                    calculate_default_price, estimate_delivery_time, timedelta, SessionLocal)
 from schemas.orders import *
 from utils.security import get_current_user
 from config import get_error_key, BASE_URL
@@ -107,9 +108,10 @@ async def list_orders(
                     Order.status == OrderStatus.READY.value,
                     Order.status == OrderStatus.DELIVERING.value,
                     and_(
+                        Order.id != OrderRating.order_id,
                         Order.status != OrderStatus.READY.value,
                         Order.updated_at >= expiry_time
-                    )
+                    ),
                 )
             )
             .all()
@@ -251,6 +253,7 @@ async def list_orders_by_deliverman(
 @router.post("/cancel_order/{id}")
 async def cancel_order(
     id: int,
+    comment: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -264,7 +267,14 @@ async def cancel_order(
         if not order:
             raise HTTPException(status_code=404, detail=get_error_key("orders", "not_found"))
         
-        order.cancel_order(db)
+        if not order.cancel_order(db):
+            order.return_order(db)
+            new_rate = OrderRating(
+                order_id=order.id,
+                rating=0,
+                comment=comment.strip()
+            )
+            save_to_db(new_rate, db)
             
         return True
     except Exception as e:

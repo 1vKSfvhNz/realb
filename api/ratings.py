@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from models import User, Product, get_db, ProductRating
+from models import User, Product, get_db, ProductRating, Order, OrderRating, OrderStatus
 from schemas.ratings import *
 from utils.security import get_current_user
 
@@ -94,7 +94,7 @@ async def get_user_rating(
         )
     
     # Obtenir toutes les notations pour ce produit
-    rating = db.query(ProductRating).filter(ProductRating.product_id == product_id, ProductRating.user_id == current_user['id']).first()
+    rating = db.query(OrderRating).filter(OrderRating.product_id == product_id, OrderRating.user_id == current_user['id']).first()
     if rating:
         return rating
     return {'rating': 0, 'comment': ''}
@@ -159,3 +159,50 @@ async def get_users_rating(
     )
 
     return response
+
+
+@router.post("/user-deliver-rating")
+async def create_user_delivery_rating(
+    rating_data: OrderRatingCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Permet à un utilisateur de noter une commande livrée (avec un commentaire).
+    """
+
+    # Vérifier que la commande existe et est livrée
+    order = db.query(Order).filter(Order.id == rating_data.order_id).first()
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Commande introuvable."
+        )
+    
+    if order.status != OrderStatus.DELIVERED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cette commande n'a pas encore été livrée."
+        )
+
+    # Vérifier si l'utilisateur a déjà noté cette commande
+    existing_rating = db.query(OrderRating).filter(OrderRating.order_id == rating_data.order_id).first()
+    if existing_rating:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vous avez déjà noté cette commande."
+        )
+
+    # Créer une nouvelle notation
+    new_rating = OrderRating(
+        order_id=rating_data.order_id,
+        rating=rating_data.rating,
+        comment=rating_data.comment,
+        user_id=current_user.id  # Si applicable
+    )
+    
+    db.add(new_rating)
+    db.commit()
+    db.refresh(new_rating)
+
+    return {}

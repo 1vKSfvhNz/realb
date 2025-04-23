@@ -200,6 +200,14 @@ class Order(Base):
             db.commit()
             return True
         return False
+
+    def return_order(self, db: Session):
+        """retourner la commande"""
+        if self.status == OrderStatus.DELIVERED.value:  # Note: compare with values
+            self.status = OrderStatus.RETURNED.value  # Use .value here
+            db.commit()
+            return True
+        return False
     
     def record_payment(self, payment_method, payment_reference, db: Session):
         """Enregistre le paiement de la commande"""

@@ -23,3 +23,16 @@ class ProductRating(Base):
 
     class Config:
         orm_mode = True
+
+class OrderRating(Base):
+    __tablename__ = "order_ratings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
+    rating = Column(Integer, nullable=False)  # Note de 1 à 5
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    order = relationship("Order", back_populates="ratings")
+    class Config:
+        orm_mode = True
