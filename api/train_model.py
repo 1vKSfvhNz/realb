@@ -1,13 +1,63 @@
-import datetime
-import logging
+from datetime import datetime
+from logging import error, info
+from os import makedirs
+from os.path import basename, exists, join
+from shutil import make_archive
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from models import User, get_db
 from utils.security import get_current_user
 from ml_engine import predictor
+from config import get_error_key
 
 router = APIRouter()
+
+@router.get("/models/download-trained-model")
+def download_trained_model(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Vérification des permissions
+    user = db.query(User).filter(User.email == current_user['email']).first()
+    if not user or user.role.lower() != 'admin':
+        raise HTTPException(status_code=403, detail=get_error_key("models", "download", "no_permission"))
+    
+    # Chemin du modèle entraîné
+    model_path = "user_interest_model.joblib"
+    metadata_path = "user_interest_model_metadata.joblib"
+    
+    # Vérifier que le modèle existe
+    if not exists(model_path):
+        raise HTTPException(status_code=404, detail=get_error_key("models", "download", "model_not_found"))
+    
+    # Créer une archive ZIP contenant le modèle et ses métadonnées
+    zip_filename = "user_interest_model_backup"
+    zip_path = f"{zip_filename}.zip"
+    
+    # Créer un dossier temporaire pour y mettre les fichiers à compresser
+    temp_dir = "temp_model_backup"
+    makedirs(temp_dir, exist_ok=True)
+    
+    # Copier les fichiers dans le dossier temporaire
+    import shutil
+    if exists(model_path):
+        shutil.copy2(model_path, join(temp_dir, basename(model_path)))
+    if exists(metadata_path):
+        shutil.copy2(metadata_path, join(temp_dir, basename(metadata_path)))
+    
+    # Compresser le dossier
+    make_archive(zip_filename, 'zip', temp_dir)
+    
+    # Nettoyer le dossier temporaire
+    shutil.rmtree(temp_dir)
+    
+    return FileResponse(
+        path=zip_path, 
+        filename="user_interest_model_backup.zip", 
+        media_type='application/zip'
+    )
 
 @router.post("/set-training-time")
 async def set_training_time(
@@ -30,7 +80,7 @@ async def set_training_time(
     
     # Valider le format de l'heure
     try:
-        parsed_time = datetime.datetime.strptime(training_time, "%H:%M")
+        parsed_time = datetime.strptime(training_time, "%H:%M")
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -82,9 +132,9 @@ def train_model_background(db: Session):
     try:
         # Ici, nous passerons la session DB au moteur de prédiction
         predictor.train_model(db)
-        logging.info("Entraînement du modèle terminé avec succès")
+        info("Entraînement du modèle terminé avec succès")
     except Exception as e:
-        logging.error(f"Erreur lors de l'entraînement du modèle: {str(e)}")
+        error(f"Erreur lors de l'entraînement du modèle: {str(e)}")
 
 @router.get("/model-status")
 async def get_model_status(
