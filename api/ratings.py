@@ -94,7 +94,7 @@ async def get_user_rating(
         )
     
     # Obtenir toutes les notations pour ce produit
-    rating = db.query(OrderRating).filter(OrderRating.product_id == product_id, OrderRating.user_id == current_user['id']).first()
+    rating = db.query(ProductRating).filter(ProductRating.product_id == product_id, ProductRating.user_id == current_user['id']).first()
     if rating:
         return rating
     return {'rating': 0, 'comment': ''}

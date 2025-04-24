@@ -48,7 +48,7 @@ def get_current_user_from_token(token: str) -> dict:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         id: str = payload.get("id")
-        if email is None:
+        if not (email and id) :
             raise ValueError("Invalid token - missing sub claim")
         return {"email": email, "id": id}
     except ExpiredSignatureError:

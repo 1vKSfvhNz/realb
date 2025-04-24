@@ -198,7 +198,8 @@
     const logoImages = document.querySelectorAll('img[src*="icon_"]');
     
     // Déterminer le type d'icône en fonction du mode
-    const iconType = mode === 'dark' ? 'icon_w' : 'icon_b';
+    // const iconType = mode === 'dark' ? 'icon_w' : 'icon_b';
+    const iconType = 'icon_w';
     
     logoImages.forEach(img => {
       const currentSrc = img.getAttribute('src');

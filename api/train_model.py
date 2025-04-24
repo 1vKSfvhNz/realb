@@ -16,13 +16,13 @@ router = APIRouter()
 
 @router.get("/models/download-trained-model")
 def download_trained_model(
-    # current_user: dict = Depends(get_current_user),
-    # db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     # Vérification des permissions
-    # user = db.query(User).filter(User.email == current_user['email']).first()
-    # if not user or user.role.lower() != 'admin':
-    #     raise HTTPException(status_code=403, detail=get_error_key("models", "download", "no_permission"))
+    user = db.query(User).filter(User.email == current_user['email']).first()
+    if not user or user.role.lower() != 'admin':
+        raise HTTPException(status_code=403, detail=get_error_key("models", "download", "no_permission"))
     
     # Chemin du modèle entraîné
     model_path = "user_interest_model.joblib"
@@ -98,10 +98,10 @@ async def set_training_time(
         "status": "success"
     }
 
-@router.post("/trigger-model-training")
+@router.get("/trigger-model-training")
 async def trigger_model_training(
     background_tasks: BackgroundTasks,
-    # current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -110,12 +110,12 @@ async def trigger_model_training(
     L'entraînement s'exécute en arrière-plan
     """
     # Vérifier les permissions - seul l'administrateur peut déclencher l'entraînement
-    # user = db.query(User).filter(User.email == current_user['email']).first()
-    # if not user or user.role != 'Admin':
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Vous n'avez pas les droits nécessaires pour cette action"
-    #     )
+    user = db.query(User).filter(User.email == current_user['email']).first()
+    if not user or user.role != 'Admin':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Vous n'avez pas les droits nécessaires pour cette action"
+        )
     
     # Lancer l'entraînement en arrière-plan pour ne pas bloquer la réponse
     background_tasks.add_task(train_model_background, db)

@@ -26,10 +26,10 @@ app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Ajout des middlewares à l'application
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["realb.onrender.com"])
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["realb.onrender.com", "192.168.11.103"])
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://realb.onrender.com"],
+    allow_origins=["https://realb.onrender.com", "http://192.168.11.103:8000"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=[
