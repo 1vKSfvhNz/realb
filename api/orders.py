@@ -107,8 +107,8 @@ async def list_orders(
                 or_(
                     Order.status == OrderStatus.READY.value,
                     Order.status == OrderStatus.DELIVERING.value,
+                    Order.id != OrderRating.order_id,
                     and_(
-                        Order.id != OrderRating.order_id,
                         Order.status != OrderStatus.READY.value,
                         Order.updated_at >= expiry_time
                     ),
