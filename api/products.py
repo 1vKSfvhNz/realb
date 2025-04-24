@@ -16,13 +16,13 @@ router = APIRouter()
 
 @router.get("/download/uploads")
 def download_uploads(
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    # current_user: dict = Depends(get_current_user),
+    # db: Session = Depends(get_db),
 ):
     # Vérification des permissions
-    user = db.query(User).filter(User.email == current_user['email']).first()
-    if not user or user.role.lower() != 'admin':
-        raise HTTPException(status_code=403, detail=get_error_key("products", "list", "no_permission"))
+    # user = db.query(User).filter(User.email == current_user['email']).first()
+    # if not user or user.role.lower() != 'admin':
+    #     raise HTTPException(status_code=403, detail=get_error_key("products", "list", "no_permission"))
 
     zip_path = "uploads_backup.zip"
     uploads_dir = "uploads"

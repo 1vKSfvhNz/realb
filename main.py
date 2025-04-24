@@ -84,16 +84,6 @@ async def read_root():
         html_content = f.read()
     return HTMLResponse(content=html_content)
 
-@app.get("/download/upload")
-def download_uploads():
-    zip_path = "uploads_backup.zip"
-    uploads_dir = "uploads"
-
-    # Compresser tout le dossier uploads
-    make_archive("uploads_backup", 'zip', uploads_dir)
-
-    return FileResponse(path=zip_path, filename="uploads_backup.zip", media_type='application/zip')
-
 # Lancer le serveur Uvicorn
 import uvicorn
 if __name__ == "__main__":
