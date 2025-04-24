@@ -101,10 +101,9 @@ async def list_orders(
         expiry_time = datetime.utcnow() - timedelta(days=3)
         orders = (
             db.query(Order)
-            .options(joinedload(Order.delivery_person))
+            .options(joinedload(Order.delivery_person), joinedload(Order.rating))
             .filter(
                 Order.customer_id == user.id,
-                Order.id != OrderRating.order_id,
                 or_(
                     Order.status == OrderStatus.READY.value,
                     Order.status == OrderStatus.DELIVERING.value,
@@ -160,7 +159,8 @@ async def list_orders(
                 purchase_time=order.purchase_time,
                 delivery_person_id=order.delivery_person_id,
                 delivery_person_name=order.delivery_person.username if order.delivery_person else '',
-                delivery_person_phone=order.delivery_person.phone if order.delivery_person else ''
+                delivery_person_phone=order.delivery_person.phone if order.delivery_person else '',
+                rating=True if order.rating else False
             )
             response_orders.append(order_response)
         

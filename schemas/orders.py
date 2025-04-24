@@ -97,6 +97,7 @@ class OrderResponse(BaseModel):
     delivery_person_name: Optional[str] = None
     delivery_person_phone: Optional[str] = None  # Corrigé le doublon et ajouté le champ téléphone
     
+    rating: bool
     # Métadonnées supplémentaires
     device_type: Optional[str] = None
     purchase_time_of_day: Optional[datetime] = None

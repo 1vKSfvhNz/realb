@@ -63,7 +63,7 @@ class Order(Base):
     status = Column(SQLAlchemyEnum('ready', 'delivering', 'delivered', 'cancelled', 'returned',
                               name='order_status_enum'),
                 default=OrderStatus.READY.value, nullable=False)
-    
+        
     # Informations du produit (anciennement dans OrderItem)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     product = relationship("Product")
