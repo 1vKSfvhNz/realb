@@ -131,3 +131,6 @@ class OrderProductAddUpdate(BaseModel):
     quantity: int = Field(gt=0)
     unit_price: Optional[float] = None  # Si None, utilisera le prix actuel du produit
     discount: float = Field(ge=0, le=100, default=0)
+
+class CancelOrderRequest(BaseModel):
+    comment: Optional[str] = None

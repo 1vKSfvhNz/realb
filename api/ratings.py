@@ -198,7 +198,7 @@ async def create_user_delivery_rating(
         order_id=rating_data.order_id,
         rating=rating_data.rating,
         comment=rating_data.comment,
-        user_id=current_user.id  # Si applicable
+        user_id=current_user['id']  # Si applicable
     )
     
     db.add(new_rating)

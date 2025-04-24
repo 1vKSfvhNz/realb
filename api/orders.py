@@ -253,7 +253,7 @@ async def list_orders_by_deliverman(
 @router.post("/cancel_order/{id}")
 async def cancel_order(
     id: int,
-    comment: Optional[str] = Query(None),
+    body: CancelOrderRequest,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -267,14 +267,14 @@ async def cancel_order(
         if not order:
             raise HTTPException(status_code=404, detail=get_error_key("orders", "not_found"))
         
-        if not order.cancel_order(db):
-            order.return_order(db)
+        if not order.cancel_order(db) and body.comment is not None:
             new_rate = OrderRating(
                 order_id=order.id,
                 rating=0,
-                comment=comment.strip()
+                comment=body.comment.strip()
             )
             save_to_db(new_rate, db)
+            order.return_order(db)
             
         return True
     except Exception as e:
