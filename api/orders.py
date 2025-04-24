@@ -104,10 +104,10 @@ async def list_orders(
             .options(joinedload(Order.delivery_person))
             .filter(
                 Order.customer_id == user.id,
+                Order.id != OrderRating.order_id,
                 or_(
                     Order.status == OrderStatus.READY.value,
                     Order.status == OrderStatus.DELIVERING.value,
-                    Order.id != OrderRating.order_id,
                     and_(
                         Order.status != OrderStatus.READY.value,
                         Order.updated_at >= expiry_time
