@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_
 
 from models import User, Product, get_db, ProductRating, Order, OrderRating, OrderStatus
 from schemas.ratings import *
@@ -55,7 +55,7 @@ async def create_product_rating(
         # Mettre à jour la note existante
         existing_rating.rating = rating_data.rating
         existing_rating.comment = new_comment
-        existing_rating.updated_at = datetime.now(timezone.utc)
+        # existing_rating.updated_at = datetime.now(timezone.utc)
         
         # Mise à jour atomique du produit
         if old_comment == "" and new_comment != "":
@@ -71,7 +71,7 @@ async def create_product_rating(
         db.commit()
         db.refresh(existing_rating)
         db.refresh(product)
-        return existing_rating
+        return {}
     
     # Créer une nouvelle notation
     new_rating = ProductRating(
@@ -96,7 +96,7 @@ async def create_product_rating(
     db.refresh(new_rating)
     db.refresh(product)
     
-    return new_rating
+    return {}
 
 
 @router.get("/user-rating/{product_id}", response_model=UserProductRatingResponse)
