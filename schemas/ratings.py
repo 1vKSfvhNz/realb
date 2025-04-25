@@ -20,12 +20,6 @@ class ProductRatingCreate(RatingBase):
 class OrderRatingCreate(RatingBase):
     order_id: int
 
-# Modèle de base pour les notations de produits
-class ProductRatingBase(BaseModel):
-    mean: float
-    nb_rating: int
-    nb_reviews: int
-
 # Réponse pour les notations utilisateur d'un produit
 class UserProductRatingResponse(BaseModel):
     rating: int = 0

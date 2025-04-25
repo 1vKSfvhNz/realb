@@ -22,7 +22,7 @@ def mean_rating(db: Session, product_id: int) -> float:
 
 
 @router.post("/product-rate", status_code=status.HTTP_201_CREATED)
-async def create_product_rating(
+def create_product_rating(
     rating_data: ProductRatingCreate,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -71,6 +71,8 @@ async def create_product_rating(
         db.commit()
         db.refresh(existing_rating)
         db.refresh(product)
+        print('============================================================')
+        print(product.rating)
         return {}
     
     # Créer une nouvelle notation
@@ -95,7 +97,8 @@ async def create_product_rating(
     db.commit() 
     db.refresh(new_rating)
     db.refresh(product)
-    
+    print('============================================================')
+    print(product.rating)    
     return {}
 
 
