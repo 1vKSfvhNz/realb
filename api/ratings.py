@@ -22,7 +22,7 @@ def mean_rating(db: Session, product_id: int) -> float:
 
 
 @router.post("/product-rate", status_code=status.HTTP_201_CREATED)
-def create_product_rating(
+async def create_product_rating(
     rating_data: ProductRatingCreate,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -49,31 +49,34 @@ def create_product_rating(
     ).first()
 
     if existing_rating:
-        # Récupérer l'ancien commentaire pour comparer
-        old_comment = existing_rating.comment if existing_rating.comment else ""
-        
+        # Récupérer l'ancien commentaire pour comparaison
+        old_comment = existing_rating.comment or ""
+
         # Mettre à jour la note existante
         existing_rating.rating = rating_data.rating
         existing_rating.comment = new_comment
         # existing_rating.updated_at = datetime.now(timezone.utc)
-        
-        # Mise à jour atomique du produit
+
+        # Mise à jour atomique du nombre de commentaires
         if old_comment == "" and new_comment != "":
             # Ajout d'un commentaire
             product.nb_reviews += 1
         elif old_comment != "" and new_comment == "":
             # Suppression d'un commentaire
             product.nb_reviews = max(0, product.nb_reviews - 1)  # Éviter les valeurs négatives
-        
+
+        # Envoyer les modifications à la base de données sans les valider
+        db.flush()
+
         # Recalculer la note moyenne
         product.rating = mean_rating(db, rating_data.product_id)
-        
+
+        # Valider les modifications
         db.commit()
         db.refresh(existing_rating)
         db.refresh(product)
-        print('============================================================')
-        print(product.rating)
-        return {}
+
+        return existing_rating
     
     # Créer une nouvelle notation
     new_rating = ProductRating(
@@ -84,22 +87,27 @@ def create_product_rating(
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc)
     )
-    
-    # Mise à jour atomique du produit
+
+    # Ajouter la nouvelle notation à la session
     db.add(new_rating)
+
+    # Mise à jour atomique du produit
     product.nb_rating += 1
     if new_comment != "":
         product.nb_reviews += 1
-    
+
+    # Synchroniser les modifications avec la base de données sans les valider
+    db.flush()
+
     # Recalculer la note moyenne
     product.rating = mean_rating(db, rating_data.product_id)
-    
-    db.commit() 
+
+    # Valider les modifications
+    db.commit()
     db.refresh(new_rating)
     db.refresh(product)
-    print('============================================================')
-    print(product.rating)    
-    return {}
+
+    return new_rating
 
 
 @router.get("/user-rating/{product_id}", response_model=UserProductRatingResponse)
