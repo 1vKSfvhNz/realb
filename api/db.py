@@ -235,26 +235,8 @@ def export_database(
             # Pour JSON avec plusieurs tables, créer un objet JSON avec les tables comme clés
             import json
             with open(file_path, 'w', encoding='utf-8') as f:
-                # Convertir chaque DataFrame en liste de dictionnaires
                 json_dict = {table: df.to_dict(orient="records") for table, df in dataframes.items()}
-                json.dump(json_dict, f, indent=4)
-                
-        else:
-            # Pour les autres formats qui ne supportent qu'une seule table
-            # ou pour les formats qui supportent plusieurs tables mais nous n'en avons qu'une
-            table_name = list(dataframes.keys())[0]
-            df = dataframes[table_name]
-            
-            if format.lower() == "json":
-                df.to_json(file_path, orient="records", indent=4)
-            elif format.lower() == "parquet":
-                df.to_parquet(file_path, compression=compression or "snappy")
-            elif format.lower() == "stata":
-                df.to_stata(file_path, write_index=False)
-            elif format.lower() == "pickle":
-                df.to_pickle(file_path, compression=compression)
-            elif format.lower() == "feather":
-                df.to_feather(file_path, compression=compression)
+                json.dump(json_dict, f, indent=4, default=str)                
         
         # Définir le type MIME approprié
         media_type = format_info["mime"]
