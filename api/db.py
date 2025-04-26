@@ -13,11 +13,11 @@ from config import get_error_key
 from models import get_db, User
 from utils.security import get_current_user
 
-
 router = APIRouter()
 
 @router.get("/export/data")
 def export_database(
+    background_tasks: BackgroundTasks,
     format: str = Query("csv", description="Format d'export (csv, excel, json, parquet, stata, pickle, feather, hdf)"),
     table: str = Query(None, description="Table spécifique à exporter (optionnel)"),
     filters: str = Query(None, description="Filtres au format JSON: {'colonne': 'valeur'} (optionnel)"),
@@ -186,7 +186,7 @@ def export_database(
                 result = db.execute(text(query))
             
             # Convertir en liste de dictionnaires
-            rows = [dict(row) for row in result]
+            rows = [dict(row._mapping) for row in result]
             
             # Créer un DataFrame
             if rows:
@@ -259,12 +259,14 @@ def export_database(
         # Définir le type MIME approprié
         media_type = format_info["mime"]
         
+        background_tasks.add_task(os.unlink, file_path)
+        
         # Renvoyer le fichier en tant que réponse téléchargeable
         return FileResponse(
             path=file_path,
             media_type=media_type,
             filename=filename,
-            background=BackgroundTasks(lambda: os.unlink(file_path))  # Supprimer le fichier après envoi
+            background=background_tasks  # Supprimer le fichier après envoi
         )
         
     except Exception as e:
