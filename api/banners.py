@@ -186,6 +186,16 @@ async def update_banner(
     db_banner.is_active = is_active
     db_banner.is_new = is_new
     db_banner.until = until_datetime
+
+    if discount_percent > 0:
+        products = db.query(Product).filter(Product.banner_id == db_banner.id).all()
+        for product in products:
+            old_price = product.price
+            price = price * (1 - discount_percent/100)
+            product.price = price
+            product.old_price = old_price
+            product.discount = discount_percent
+
     db.commit()
 
     return db_banner
@@ -207,7 +217,10 @@ async def delete_banner(
 
     products = db.query(Product).filter(Product.banner_id == db_banner.id).all()
     for product in products:
+        product.price = product.old_price
         product.banner_id = None
+        product.old_price = None
+        product.discount = None
     
     delete_from_db(db_banner, db)
     return {}
