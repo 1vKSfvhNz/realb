@@ -4,7 +4,7 @@ import tempfile
 from datetime import datetime
 
 from pandas import DataFrame, ExcelWriter
-from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTask
+from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect, text
@@ -264,7 +264,7 @@ def export_database(
             path=file_path,
             media_type=media_type,
             filename=filename,
-            background=BackgroundTask(lambda: os.unlink(file_path))  # Supprimer le fichier après envoi
+            background=BackgroundTasks(lambda: os.unlink(file_path))  # Supprimer le fichier après envoi
         )
         
     except Exception as e:
