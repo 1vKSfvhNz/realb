@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, SMALLINT
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, SMALLINT, ForeignKey
 from sqlalchemy.orm import Session, relationship
 
 from utils.security import hash_passw, verify_passw
@@ -69,3 +69,10 @@ class User(Base):
     # Vérifier le mot de passe
     def verify_password(self, plain_password: str) -> bool:
         return verify_passw(plain_password, self.password)
+
+class UserDevice(Base):
+    __tablename__ = "user_devices"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    device_token = Column(String)
+    platform = Column(String)  # 'ios' ou 'android'

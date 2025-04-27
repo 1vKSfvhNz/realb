@@ -1,17 +1,39 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
-from models import User, get_db, SessionLocal
+from models import User, UserDevice, get_db, SessionLocal
 from typing import Dict, List
+import httpx
+import json
+import logging
 from utils.security import get_current_user_from_token
 from config import get_error_key
+from pydantic import BaseModel
 
-# Séparation en deux routeurs distincts
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+FIREBASE_SERVER_KEY = "BMthP7vO3cl81leDihXwZ79kCsp75U7RiNDkXJhGDZiIjiBKvo47SdOoPBiruKw80xslAZnFxZa-50hLiGNw-Ek"
+
+APNS_BUNDLE_ID = "jjgjg"
+
+# Router for our endpoints
 router = APIRouter()
 
-# Structure pour stocker les connexions: {user_id: {'role': '...', 'ws': websocket}}
+# Connection storage: {user_id: {'role': '...', 'ws': websocket, ...}}
 connections: Dict[str, Dict] = {}
 
-# Routes REST avec le préfixe /api
+# Pydantic model for notification preferences
+class NotificationPreference(BaseModel):
+    enabled: bool
+    preference_type: str = "push"
+
+# Pydantic model for device registration
+class DeviceRegistration(BaseModel):
+    device_token: str
+    platform: str
+
+# REST Routes with /api prefix
 @router.get("/notification_preference")
 async def get_notification_preference(
     current_user: dict = Depends(get_current_user_from_token),
@@ -22,14 +44,16 @@ async def get_notification_preference(
         if not user:
             raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
         
-        # Retourner la préférence actuelle (vrai par défaut)
+        # Return current preference (true by default)
         return {"enabled": user.notifications}
     except Exception as e:
         db.rollback()
-        raise e
+        logger.error(f"Error retrieving notification preference: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/notification_preference")
 async def update_notification_preference(
+    preference: NotificationPreference,
     current_user: dict = Depends(get_current_user_from_token),
     db: Session = Depends(get_db)
 ):
@@ -38,51 +62,65 @@ async def update_notification_preference(
         if not user:
             raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
         
-        user.notifications = not user.notifications
+        # Update with the provided setting instead of toggling
+        user.notifications = preference.enabled
         db.commit()
-        return {"message": "Préférence de notification mise à jour", "enabled": user.notifications}
+        
+        # If user is connected via WebSocket, sync the preference
+        user_id = str(user.id)
+        if user_id in connections:
+            try:
+                await connections[user_id]['ws'].send_json({
+                    "type": "notification_preference_updated",
+                    "enabled": preference.enabled
+                })
+            except Exception as ws_error:
+                logger.error(f"Error notifying WebSocket: {str(ws_error)}")
+        
+        return {"message": "Notification preference updated", "enabled": user.notifications}
     except Exception as e:
         db.rollback()
-        raise e
+        logger.error(f"Error updating notification preference: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
-    # D'abord accepter la connexion avant toute vérification
+    # First accept the connection before any verification
     await websocket.accept()
     
     token = websocket.query_params.get("token")
     if not token:
-        print("❌ Token manquant")
-        await websocket.close(code=1008, reason="Token manquant")
+        logger.warning("❌ Missing token")
+        await websocket.close(code=1008, reason="Missing token")
         return
 
-    user_id = None  # pour éviter une erreur dans le finally
-    db = None  # Initialiser db à None pour pouvoir le fermer en toute sécurité
+    user_id = None  # To avoid error in finally block
+    db = None  # Initialize db to None to safely close it
     
     try:
-        # Ajouter des logs pour le débogage
-        print(f"🔄 Vérification du token: {token[:10]}...")
+        # Add logs for debugging
+        logger.info(f"🔄 Verifying token: {token[:10]}...")
         
         user = get_current_user_from_token(token)
-        user_id = str(user["id"])  # Convertir en string pour utiliser comme clé
+        user_id = str(user["id"])  # Convert to string to use as key
         
-        print(f"✅ Token valide pour l'utilisateur: {user_id}")
+        logger.info(f"✅ Valid token for user: {user_id}")
 
-        # Créer une session DB dédiée pour ce websocket
+        # Create a dedicated DB session for this websocket
         db = SessionLocal()
         
-        # Récupérer les informations de l'utilisateur
+        # Get user information
         user_info = db.query(User.role, User.notifications, User.username).filter(User.id == user_id).first()
         if not user_info:
-            print(f"❌ Utilisateur {user_id} introuvable dans la base de données")
-            await websocket.close(code=1008, reason="Utilisateur introuvable")
+            logger.warning(f"❌ User {user_id} not found in database")
+            await websocket.close(code=1008, reason="User not found")
             return
 
         role, notifications_enabled, username = user_info
         
-        print(user_info)
+        logger.info(f"User info: {user_info}")
 
-        # Stocker la connexion avec les métadonnées
+        # Store connection with metadata
         connections[user_id] = {
             'role': role,
             'ws': websocket,
@@ -90,9 +128,9 @@ async def websocket_notifications(websocket: WebSocket):
             'username': username
         }
         
-        print(f"✅ Utilisateur connecté : {user_id} ({role})")
+        logger.info(f"✅ User connected: {user_id} ({role})")
 
-        # Message de confirmation pour le client
+        # Send confirmation message to client
         await websocket.send_json({
             "type": "connection_status",
             "status": "connected",
@@ -100,48 +138,183 @@ async def websocket_notifications(websocket: WebSocket):
             "notifications_enabled": notifications_enabled
         })
 
+        # Update global livreur references for compatibility
+        update_livreur_references()
+
         while True:
-            # Recevoir et traiter les messages du client
+            # Receive and process client messages
             message = await websocket.receive_json()
             
-            # Traiter les différents types de messages
+            # Process different message types
             if message.get("type") == "set_notification_preference":
-                # Mettre à jour la préférence dans la base de données
+                # Update preference in database
                 new_setting = message.get("enabled", True)
                 user_obj = db.query(User).filter(User.id == user_id).first()
                 user_obj.notifications = new_setting
                 db.commit()
                 
-                # Mettre à jour dans notre cache
+                # Update in our cache
                 connections[user_id]['notifications_enabled'] = new_setting
                 
-                # Confirmer au client
+                # Confirm to client
                 await websocket.send_json({
                     "type": "notification_preference_updated",
                     "enabled": new_setting
                 })
+            else:
+                logger.info(f"Received unhandled message type: {message.get('type')}")
 
     except WebSocketDisconnect:
-        print(f"🔌 Déconnexion WebSocket ({user_id})")
+        logger.info(f"🔌 WebSocket disconnection ({user_id})")
     except Exception as e:
-        print(f"❌ Erreur WebSocket ({user_id if user_id else 'inconnu'}):", str(e))
+        logger.error(f"❌ WebSocket error ({user_id if user_id else 'unknown'}):", str(e))
         if db:
-            db.rollback()  # Annuler toute transaction en cours
+            db.rollback()  # Cancel any ongoing transaction
         try:
-            await websocket.close(code=1008, reason=f"Erreur: {str(e)[:50]}")
+            await websocket.close(code=1008, reason=f"Error: {str(e)[:50]}")
         except:
-            # Ignorer les erreurs lors de la fermeture
+            # Ignore errors during closure
             pass
 
     finally:
-        # Fermer la connexion à la base de données si elle existe
+        # Close database connection if it exists
         if db:
             db.close()
             
         if user_id and user_id in connections:
             connections.pop(user_id)
-            print(f"🚫 Utilisateur déconnecté : {user_id}")
+            logger.info(f"🚫 User disconnected: {user_id}")
+            # Update livreur references after disconnection
+            update_livreur_references()
 
+# Route to register a device token
+@router.post("/register_device")
+async def register_device(
+    device: DeviceRegistration,
+    current_user: dict = Depends(get_current_user_from_token),
+    db: Session = Depends(get_db)
+):
+    try:
+        # Register the device token for the user
+        user_id = current_user['id']
+        
+        # Check if device already exists
+        existing_device = db.query(UserDevice).filter(
+            UserDevice.user_id == user_id,
+            UserDevice.device_token == device.device_token
+        ).first()
+        
+        if not existing_device:
+            # Create a new device
+            new_device = UserDevice(
+                user_id=user_id,
+                device_token=device.device_token,
+                platform=device.platform
+            )
+            db.add(new_device)
+            db.commit()
+            logger.info(f"Registered new device for user {user_id}")
+        else:
+            # Update last used timestamp
+            existing_device.last_used_at = db.func.now()
+            db.commit()
+            logger.info(f"Updated existing device for user {user_id}")
+            
+        return {"message": "Device registered successfully"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error registering device: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Function to send push notifications
+async def send_push_notification(user_id: str, title: str, body: str, data: dict = None):
+    """Send a push notification to a specific user"""
+    db = SessionLocal()
+    try:
+        # Get device tokens for the user
+        devices = db.query(UserDevice).filter(UserDevice.user_id == user_id).all()
+        
+        if not devices:
+            logger.info(f"No registered devices for user {user_id}")
+            return
+            
+        for device in devices:
+            if device.platform.lower() == 'android':
+                await send_fcm_notification(device.device_token, title, body, data)
+            elif device.platform.lower() == 'ios':
+                await send_apns_notification(device.device_token, title, body, data)
+                
+    except Exception as e:
+        logger.error(f"Error sending push notification: {e}")
+    finally:
+        db.close()
+
+# Send FCM notification (Firebase Cloud Messaging) for Android
+async def send_fcm_notification(token: str, title: str, body: str, data: dict = None):
+    url = "https://fcm.googleapis.com/fcm/send"
+    headers = {
+        "Authorization": f"key={FIREBASE_SERVER_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "to": token,
+        "notification": {
+            "title": title,
+            "body": body,
+            "sound": "default"
+        }
+    }
+    
+    if data:
+        payload["data"] = data
+        
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            logger.info(f"FCM notification sent: {response.text}")
+        except Exception as e:
+            logger.error(f"Error sending FCM: {e}")
+
+# Send APNS notification for iOS
+async def send_apns_notification(token: str, title: str, body: str, data: dict = None):
+    try:
+        # Implementation for Apple Push Notification Service
+        # This is a simplified version - in production you'd use aioapns or a similar library
+        headers = {
+            "apns-push-type": "alert",
+            "apns-topic": APNS_BUNDLE_ID,
+            "apns-priority": "10",
+            "apns-expiration": "0"
+        }
+        
+        payload = {
+            "aps": {
+                "alert": {
+                    "title": title,
+                    "body": body
+                },
+                "sound": "default"
+            }
+        }
+        
+        if data:
+            # Add custom data to payload
+            for key, value in data.items():
+                if key != "aps":  # Don't override the aps dictionary
+                    payload[key] = value
+        
+        # This is a placeholder - you would use proper APNS authentication
+        logger.info(f"Would send APNS to: {token}")
+        logger.info(f"APNS payload: {json.dumps(payload)}")
+        
+        # In production, implement actual APNS sending here
+        
+    except Exception as e:
+        logger.error(f"Error sending APNS: {e}")
+
+# Notify users via WebSocket and push notifications
 async def notify_users(
     message: dict, 
     roles: List[str] = None, 
@@ -149,67 +322,98 @@ async def notify_users(
     exclude_ids: List[str] = None
 ):
     """
-    Envoie une notification aux utilisateurs connectés par rôle ou ID
-    
-    Args:
-        message: Dictionnaire contenant le message à envoyer
-        roles: Liste des rôles à notifier (ex: ['Client', 'Deliver', 'Admin'])
-        user_ids: Liste spécifique d'IDs utilisateurs à notifier
-        exclude_ids: Liste d'IDs utilisateurs à exclure
+    Send a notification to connected users via WebSocket and push notification
     """
     disconnected = []
     
-    # Déterminer quels utilisateurs doivent recevoir la notification
-    target_users = set()
-    
-    # Filtrer par rôle
-    if roles:
-        for user_id, info in connections.items():
-            if info['role'].lower() in [r.lower() for r in roles]:
-                target_users.add(user_id)
-    
-    # Ajouter les IDs spécifiques
-    if user_ids:
-        for user_id in user_ids:
+    # Determine which users should receive the notification
+    db = SessionLocal()
+    try:
+        # Get all users matching criteria
+        query = db.query(User)
+        
+        # Filter by role if specified
+        if roles:
+            query = query.filter(User.role.in_([r.title() for r in roles]))
+            
+        # Filter by specific IDs if specified
+        if user_ids:
+            query = query.filter(User.id.in_(user_ids))
+            
+        # Exclude certain IDs if needed
+        if exclude_ids:
+            query = query.filter(User.id.notin_(exclude_ids))
+            
+        # Only send to users with notifications enabled
+        query = query.filter(User.notifications == True)
+        
+        # Get all target users
+        all_target_users = query.all()
+        
+        # Convert to set of IDs for processing
+        all_target_ids = {str(user.id) for user in all_target_users}
+        
+        logger.info(f"Sending notification to {len(all_target_ids)} users")
+        
+        # Send via WebSocket for connected users
+        for user_id in all_target_ids:
             if user_id in connections:
-                target_users.add(user_id)
-    
-    # Si aucun filtre n'est spécifié, notifier tout le monde
-    if not roles and not user_ids:
-        target_users = set(connections.keys())
-    
-    # Exclure certains IDs si nécessaire
-    if exclude_ids:
-        target_users = target_users - set(exclude_ids)
-    
-    # Envoyer les notifications
-    for user_id in target_users:
-        info = connections.get(user_id)
-        if not info:
-            continue
-            
-        # Vérifier si les notifications sont activées pour cet utilisateur
-        if not info.get('notifications_enabled', True):
-            continue
-            
-        try:
-            await info['ws'].send_json(message)
-        except Exception:
-            disconnected.append(user_id)
-    
-    # Nettoyer les connexions déconnectées
+                info = connections.get(user_id)
+                
+                # Check if notifications are enabled
+                if not info.get('notifications_enabled', True):
+                    logger.info(f"Skipping user {user_id} - notifications disabled")
+                    continue
+                    
+                try:
+                    await info['ws'].send_json(message)
+                    logger.info(f"WebSocket notification sent to user {user_id}")
+                except Exception as ws_error:
+                    logger.error(f"Error sending WebSocket notification to {user_id}: {str(ws_error)}")
+                    disconnected.append(user_id)
+                    
+                    # If WebSocket fails, try to send via push notification
+                    if "title" in message and "body" in message:
+                        await send_push_notification(
+                            user_id, 
+                            message["title"], 
+                            message["body"], 
+                            data=message.get("data")
+                        )
+            else:
+                # User not connected via WebSocket, send via push
+                if "title" in message and "body" in message:
+                    logger.info(f"Sending push notification to disconnected user {user_id}")
+                    await send_push_notification(
+                        user_id, 
+                        message["title"], 
+                        message["body"], 
+                        data=message.get("data")
+                    )
+                
+    except Exception as e:
+        logger.error(f"Error in notify_users: {e}")
+    finally:
+        db.close()
+        
+    # Clean up disconnected connections
     for user_id in disconnected:
         if user_id in connections:
             connections.pop(user_id)
+            logger.info(f"Removed disconnected user {user_id} from connections")
+    
+    # Update livreur references if we removed any connections
+    if disconnected:
+        update_livreur_references()
 
-# Pour maintenir la compatibilité avec l'ancien code
+# Global reference for legacy code compatibility
 livreurs = {}
 
-# Méthode pour obtenir les livreurs à partir des connexions
+# Method to get delivery drivers from connections
 def get_livreurs():
     """
-    Retourne un dictionnaire des livreurs connectés
-    Compatible avec l'ancien format pour les intégrations existantes
+    Returns a dictionary of connected delivery drivers
+    Compatible with old format for existing integrations
     """
     result = {}
     for user_id, info in connections.items():
@@ -217,8 +421,9 @@ def get_livreurs():
             result[user_id] = info['ws']
     return result
 
-# Mettre à jour la référence livreurs à chaque changement de connexion
+# Update livreur references on connection change
 def update_livreur_references():
-    """Met à jour la référence globale des livreurs pour la compatibilité"""
+    """Update global livreur reference for compatibility"""
     global livreurs
     livreurs = get_livreurs()
+    logger.info(f"Updated livreur references: {len(livreurs)} connected")
