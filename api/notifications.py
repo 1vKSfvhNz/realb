@@ -5,6 +5,7 @@ from typing import Dict, List
 import httpx
 import json
 import logging
+from os import getenv
 from utils.security import get_current_user_from_token
 from config import get_error_key
 from pydantic import BaseModel
@@ -13,9 +14,9 @@ from pydantic import BaseModel
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-FIREBASE_SERVER_KEY = "BMthP7vO3cl81leDihXwZ79kCsp75U7RiNDkXJhGDZiIjiBKvo47SdOoPBiruKw80xslAZnFxZa-50hLiGNw-Ek"
+FIREBASE_SERVER_KEY = getenv("FIREBASE_SERVER_KEY")
 
-APNS_BUNDLE_ID = "jjgjg"
+APNS_BUNDLE_ID = getenv("APNS_BUNDLE_ID", "hggh")
 
 # Router for our endpoints
 router = APIRouter()
