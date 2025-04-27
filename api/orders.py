@@ -50,7 +50,7 @@ async def create_order(
         )
 
         new_order = Order(
-            customer=user,
+            customer_id=user.id,
             latitude=float(order_data.latitude),
             longitude=float(order_data.longitude),
             accuracy=float(order_data.accuracy),

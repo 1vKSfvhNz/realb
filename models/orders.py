@@ -120,14 +120,9 @@ class Order(Base):
         """Calcule les montants totaux de la commande basés sur le produit unique"""
         # Pour un seul produit, le calcul est simplifié
         if isinstance(self.product, Product):
-            self.subtotal = self.product.price * self.quantity
-            if isinstance(self.product.banner, Banner):
-                discount_amount = (self.subtotal * self.product.banner.discountPercent) / 100
-                self.subtotal -= discount_amount
-            
+            self.subtotal = self.product.price * self.quantity            
             # Calculer le total avec frais de livraison et taxes
             self.total_amount = self.subtotal + self.delivery_fee + self.tax
-            
             # Calculer le prix moyen (identique au prix unitaire pour une commande à un seul produit)
             self.average_item_price = self.product.price
     
