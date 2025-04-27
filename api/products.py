@@ -448,7 +448,7 @@ async def update_product(
     
     discount = db.query(Banner.discountPercent).filter(Banner.id == banner_id).first()
     discount_value = discount[0] if discount else 0  # ou None, selon ton besoin
-    if discount_value and not product.discount:
+    if discount_value and (not product.discount or product.price != price):
         old_price = price
         price = price * (1 - discount_value/100)
 
