@@ -451,6 +451,8 @@ async def update_product(
     if discount_value and (not product.discount or product.price != price):
         old_price = price
         price = price * (1 - discount_value/100)
+    elif not discount_value and old_price:
+        discount_value = int((old_price - price)/old_price)
 
     product.name = name
     product.price = price
