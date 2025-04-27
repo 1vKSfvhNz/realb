@@ -238,7 +238,7 @@ def calculate_default_price(old_order: tuple | None, distance: float, products_v
 
     if old_order:
         base_price = 0
-    value_price = products_value * 0.01 * rayon
+    value_price = products_value * 0.05 * rayon
 
     delivery_price = math.floor(base_price + value_price)          
     return delivery_price

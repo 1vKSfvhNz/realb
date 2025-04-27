@@ -350,7 +350,6 @@ async def deliver_order_sum(
                 Product.longitude,
                 Product.currency,
                 Product.price,
-                Banner.discountPercent
             )
             .join(Banner, Product.banner_id == Banner.id, isouter=True)
             .filter(Product.id == order_data.product_id)
@@ -366,13 +365,10 @@ async def deliver_order_sum(
             Order.status == OrderStatus.READY.value
         ).limit(1).scalar() is not None
 
-        latitude, longitude, currency, price, discount_percent = product_data
-
-        if discount_percent:
-            price = (price * (1 - discount_percent/100))
+        latitude, longitude, currency, price = product_data
         
         # Coordonnées du client et du produit
-        user_coords = (order_data.latitude, order_data.longitude)  
+        user_coords = (order_data.latitude, order_data.longitude)
         product_coords = (latitude, longitude)
         
         # Calculer la distance en kilomètres
