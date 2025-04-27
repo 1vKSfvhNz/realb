@@ -183,7 +183,7 @@ async def list_orders_by_deliverman(
         expiry_time = datetime.now() - timedelta(days=2)
         orders = (
             db.query(Order)
-            .options(joinedload(Order.customer))  # charge les données du client en même temps que la commande
+            .options(joinedload(Order.customer), joinedload(Order.rating))  # charge les données du client en même temps que la commande
             .filter(
                 or_(
                     Order.status == OrderStatus.READY.value,
@@ -239,7 +239,8 @@ async def list_orders_by_deliverman(
                 delivery_started_at=order.delivery_started_at,
                 delivered_at=order.delivered_at,
                 cancelled_at=order.cancelled_at,
-                purchase_time=order.purchase_time
+                purchase_time=order.purchase_time,
+                rating=True if order.rating else False
             )
             response_orders.append(order_response)
         
