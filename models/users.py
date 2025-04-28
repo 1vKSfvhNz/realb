@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, SMALLINT, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, SMALLINT, ForeignKey, func
 from sqlalchemy.orm import Session, relationship
 
 from utils.security import hash_passw, verify_passw
@@ -22,6 +22,7 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     notifications = Column(Boolean, default=False, nullable=False)
     role = Column(String(16), default='Admin', nullable=False)  # 'Admin', 'Moderator', 'User'
+    devices = relationship("UserDevice", back_populates="user")
     
     can_add_category = Column(Boolean, default=False, nullable=False)  # Permet d'ajouter une catégorie
     can_add_banner = Column(Boolean, default=False, nullable=False)  # Permet d'ajouter une bannière
@@ -76,3 +77,7 @@ class UserDevice(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     device_token = Column(String)
     platform = Column(String)  # 'ios' ou 'android'
+    last_used_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    # Relation avec l'utilisateur
+    user = relationship("User", back_populates="devices")

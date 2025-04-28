@@ -6,7 +6,7 @@ import httpx
 import json
 import logging
 from os import getenv
-from utils.security import get_current_user_from_token
+from utils.security import get_current_user_from_token, get_current_user
 from config import get_error_key
 from pydantic import BaseModel
 
@@ -189,7 +189,7 @@ async def websocket_notifications(websocket: WebSocket):
 @router.post("/register_device")
 async def register_device(
     device: DeviceRegistration,
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
@@ -212,11 +212,11 @@ async def register_device(
             db.add(new_device)
             db.commit()
             logger.info(f"Registered new device for user {user_id}")
-        else:
-            # Update last used timestamp
-            existing_device.last_used_at = db.func.now()
-            db.commit()
-            logger.info(f"Updated existing device for user {user_id}")
+        # else:
+        #     # Update last used timestamp
+        #     existing_device.last_used_at = db.func.now()
+        #     db.commit()
+        #     logger.info(f"Updated existing device for user {user_id}")
             
         return {"message": "Device registered successfully"}
     except Exception as e:
