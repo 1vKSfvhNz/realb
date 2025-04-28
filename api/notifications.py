@@ -37,7 +37,7 @@ class DeviceRegistration(BaseModel):
 # REST Routes with /api prefix
 @router.get("/notification_preference")
 async def get_notification_preference(
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
@@ -55,7 +55,7 @@ async def get_notification_preference(
 @router.post("/notification_preference")
 async def update_notification_preference(
     preference: NotificationPreference,
-    current_user: dict = Depends(get_current_user_from_token),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
