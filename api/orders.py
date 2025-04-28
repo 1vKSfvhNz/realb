@@ -187,7 +187,10 @@ async def list_orders_by_deliverman(
             .filter(
                 or_(
                     Order.status == OrderStatus.READY.value,
-                    Order.status == OrderStatus.DELIVERING.value,
+                    and_(
+                        Order.status == OrderStatus.DELIVERING.value,
+                        Order.delivery_person_id == user.id,
+                    ),
                     and_(
                         Order.delivery_person_id == user.id,
                         Order.status != OrderStatus.READY.value,
