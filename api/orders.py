@@ -186,15 +186,18 @@ async def list_orders_by_deliverman(
             .options(joinedload(Order.customer), joinedload(Order.rating))  # charge les données du client en même temps que la commande
             .filter(
                 or_(
-                    Order.status == OrderStatus.READY.value,
+                    and_(
+                        Order.status == OrderStatus.READY.value,
+                        Order.customer_id != user.id,
+                    ),
                     and_(
                         Order.status == OrderStatus.DELIVERING.value,
                         Order.delivery_person_id == user.id,
                     ),
                     and_(
-                        Order.delivery_person_id == user.id,
                         Order.status != OrderStatus.READY.value,
                         Order.status != OrderStatus.DELIVERING.value,
+                        Order.delivery_person_id == user.id,
                         Order.updated_at >= expiry_time
                     )
                 )
