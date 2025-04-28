@@ -342,9 +342,7 @@ async def create_user_delivery_rating(
         order_id=rating_data.order_id,
         rating=rating_data.rating,
         comment=rating_data.comment.strip() if rating_data.comment else "",
-        user_id=current_user['id'],
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc)
+        created_at=datetime.now(timezone.utc)
     )
     
     db.add(new_rating)
