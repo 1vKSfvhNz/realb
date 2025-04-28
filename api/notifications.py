@@ -231,13 +231,14 @@ async def send_push_notification(user_id: str, title: str, body: str, data: dict
     try:
         # Get device tokens for the user
         devices = db.query(UserDevice).filter(UserDevice.user_id == user_id).all()
-        
         if not devices:
             logger.info(f"No registered devices for user {user_id}")
             return
             
+        print('==========================================')
         for device in devices:
             if device.platform.lower() == 'android':
+                print('==========================================+++++++++++')
                 await send_fcm_notification(device.device_token, title, body, data)
             elif device.platform.lower() == 'ios':
                 await send_apns_notification(device.device_token, title, body, data)
@@ -255,7 +256,7 @@ async def send_push_notification_if_needed(user_id: str, message: dict):
             message["body"], 
             data=message.get("data")
         )
-        
+
 # Send FCM notification (Firebase Cloud Messaging) for Android
 async def send_fcm_notification(token: str, title: str, body: str, data: dict = None):
     url = "https://fcm.googleapis.com/fcm/send"

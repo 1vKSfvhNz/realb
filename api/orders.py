@@ -78,9 +78,15 @@ async def create_order(
             message={
                 "type": "new_order",
                 "command_id": new_order.id,
-                "message": user.username
+                "message": user.username,
+                "title": "Nouvelle commande!",  # Pour les notifications push
+                "body": f"Nouvelle commande de {user.username}",  # Pour les notifications push
+                "data": {  # Données supplémentaires pour les notifications push
+                    "order_id": new_order.id,
+                    "action": "view_order"
+                }
             },
-            roles=["deliver", "admin"]  # Notifier tous les livreurs et admins
+            roles=["deliver", "admin"]
         )
         return {"message": "Commande créée", "order_id": new_order.id}
     except Exception as e:
