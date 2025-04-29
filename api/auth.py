@@ -16,38 +16,68 @@ router = APIRouter()
 
 @router.post("/create_user")
 async def create_user(
-    user: UserCreate, 
+    user: UserCreate,
     db: Session = Depends(get_db)
 ):
-    # Vérifier si l'utilisateur existe déjà
-    existing_user = db.query(User).filter(or_(User.email == user.email, User.phone == user.phone)).first()
+    # Check if user already exists
+    existing_user = db.query(User).filter(
+        or_(User.email == user.email, User.phone == user.phone)
+    ).first()
+    
     if existing_user:
-        raise HTTPException(status_code=400, detail=get_error_key("users", "create", "email_or_phone_exists"))
-
-    if not user.code:    
+        raise HTTPException(
+            status_code=400, 
+            detail=get_error_key("users", "create", "email_or_phone_exists")
+        )
+    
+    # Step 1: Generate verification code if code is not provided
+    if not user.code:
         code_user = db.query(GenerateCode).filter(GenerateCode.email == user.email).first()
         if not code_user:
             code_user = GenerateCode(email=user.email)
             code_user.save_to_db(db)
         else:
             code_user.update_code(db)
-    else:
-        code_user = db.query(GenerateCode).filter(GenerateCode.email == user.email, GenerateCode.code == user.code).first()
-        if code_user:
-            db_user = User(email=user.email, username=user.username, password=user.password, phone=user.phone)
-            db_user.save_user(db)
-            return {"message": "FIN"}
+            
+        try:
+            await send_email_async(
+                to_email=user.email,
+                subject="Bienvenue sur notre plateforme",
+                body_file="user_created.html",
+                context={'username': user.username, 'Code': code_user.code},
+            )
+        except Exception as e:
+            logging.error(f"Erreur lors de l'envoi de l'email : {e}", exc_info=True)
+            
+        return {"message": True}
     
-    try:
-        await send_email_async(
-            to_email=user.email,
-            subject="Bienvenue sur notre plateforme",
-            body_file="user_created.html",
-            context={'username': user.username, 'Code': code_user.code},
+    # Step 2: Verify code and create user if code is provided
+    else:
+        code_user = db.query(GenerateCode).filter(
+            GenerateCode.email == user.email, 
+            GenerateCode.code == user.code
+        ).first()
+        
+        if not code_user:
+            raise HTTPException(
+                status_code=400,
+                detail=get_error_key("users", "create", "invalid_code")
+            )
+            
+        # Create the user
+        db_user = User(
+            email=user.email,
+            username=user.username,
+            password=user.password,
+            phone=user.phone
         )
-    except Exception as e:
-        logging.error(f"Erreur lors de l'envoi de l'email : {e}", exc_info=True)
-    return {"message": True}
+        db_user.save_user(db)
+        
+        # Delete the verification code entry
+        db.delete(code_user)
+        db.commit()
+        
+        return {"message": "FIN"}
 
 # ✅ 
 # @router.post("/create_user")
