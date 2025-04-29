@@ -40,12 +40,14 @@ async def create_user(
             code_user.update_code(db)
             
         try:
+            print('++++++++++++++++++++++++++++++++++++++++++++++')
             await send_email_async(
                 to_email=user.email,
                 subject="Bienvenue sur notre plateforme",
                 body_file="user_created.html",
                 context={'username': user.username, 'Code': code_user.code},
             )
+            print('=================================================')
         except Exception as e:
             logging.error(f"Erreur lors de l'envoi de l'email : {e}", exc_info=True)
             
