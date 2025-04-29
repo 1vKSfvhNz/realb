@@ -2,15 +2,77 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from models import User, GenerateCode, datetime, timezone, get_db
 from utils.email import send_email_async
-from models import User, PasswordResetCode, datetime, timezone, save_to_db, get_db
 from schemas.auth import *
+from schemas.users import *
 from utils.security import create_access_token
 from config import get_error_key
 
 router = APIRouter()
+
+@router.post("/create_user")
+async def create_user(
+    user: UserCreate, 
+    db: Session = Depends(get_db)
+):
+    # Vérifier si l'utilisateur existe déjà
+    existing_user = db.query(User).filter(or_(User.email == user.email, User.phone == user.phone)).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail=get_error_key("users", "create", "email_or_phone_exists"))
+
+    if not user.code:    
+        code_user = db.query(GenerateCode).filter(GenerateCode.email == user.email).first()
+        if not code_user:
+            code_user = GenerateCode(email=user.email)
+            code_user.save_to_db(db)
+        else:
+            code_user.update_code(db)
+    else:
+        code_user = db.query(GenerateCode).filter(GenerateCode.email == user.email, GenerateCode.code == user.code).first()
+        if code_user:
+            db_user = User(email=user.email, username=user.username, password=user.password, phone=user.phone)
+            db_user.save_user(db)
+            return {"message": "FIN"}
+    
+    try:
+        await send_email_async(
+            to_email=user.email,
+            subject="Bienvenue sur notre plateforme",
+            body_file="user_created.html",
+            context={'username': user.username, 'Code': code_user.code},
+        )
+    except Exception as e:
+        logging.error(f"Erreur lors de l'envoi de l'email : {e}", exc_info=True)
+    return {"message": True}
+
+# ✅ 
+# @router.post("/create_user")
+# async def create_user(
+#     user: UserCreate, 
+#     db: Session = Depends(get_db)
+# ):
+#     # Vérifier si l'utilisateur existe déjà
+#     existing_user = db.query(User).filter(or_(User.email == user.email, User.phone == user.phone)).first()
+#     if existing_user:
+#         raise HTTPException(status_code=400, detail=get_error_key("users", "create", "email_or_phone_exists"))
+#     db_user = User(email=user.email, username=user.username, password=user.password, phone=user.phone)
+#     db_user.save_user(db)
+
+#     try:
+#         await send_email_async(
+#             to_email=db_user.email,
+#             subject="Bienvenue sur notre plateforme",
+#             body_file="user_created.html",
+#             context={'username': db_user.username},
+#         )
+#     except Exception as e:
+#         logging.error(f"Erreur lors de l'envoi de l'email : {e}", exc_info=True)
+#     return {"message": "Compte créer"}
+
 
 # Route de connexion pour générer un token en utilisant la base de données
 @router.post("/login")
@@ -52,10 +114,10 @@ async def forget_password(
         if not db_user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=get_error_key("auth", "forgot_password", "user_not_found"))
 
-        code_user = db.query(PasswordResetCode).filter(PasswordResetCode.email == request.email).first()
+        code_user = db.query(GenerateCode).filter(GenerateCode.email == request.email).first()
         if not code_user:
-            code_user = PasswordResetCode(email=db_user.email)
-            save_to_db(code_user, db)
+            code_user = GenerateCode(email=db_user.email)
+            code_user.save_to_db(db)
         else:
             code_user.update_code(db)
             
@@ -85,7 +147,7 @@ def reset_password(
         if not db_user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=get_error_key("auth", "forgot_password", "user_not_found"))
             
-        user_code = db.query(PasswordResetCode).filter(PasswordResetCode.email == request.email).first()
+        user_code = db.query(GenerateCode).filter(GenerateCode.email == request.email).first()
         if not user_code:
             raise HTTPException(status_code=400, detail=get_error_key("auth", "reset_password", "no_request"))
             
@@ -114,7 +176,7 @@ def verify_code(
     db: Session = Depends(get_db)
 ):
     try:
-        user_code = db.query(PasswordResetCode).filter(PasswordResetCode.email == request.email).first()
+        user_code = db.query(GenerateCode).filter(GenerateCode.email == request.email).first()
         if not user_code:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=get_error_key("auth", "verify_code", "no_request"))
             

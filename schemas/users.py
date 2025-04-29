@@ -7,6 +7,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    code: Optional[str] = None
 
     class Config:
         from_attributes = True

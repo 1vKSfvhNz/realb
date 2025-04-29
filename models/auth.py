@@ -1,25 +1,34 @@
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import Column, String, DateTime
 from sqlalchemy.orm import Session
-
 from .base import Base
 from utils.security import gen_code
- 
-class PasswordResetCode(Base):
-    __tablename__ = "password_reset_codes"
+
+def now_utc():
+    """Retourne l'heure actuelle en UTC."""
+    return datetime.now(timezone.utc)
+
+class GenerateCode(Base):
+    __tablename__ = "generate_codes"
 
     email = Column(String, primary_key=True, index=True)
-    code = Column(String, default=gen_code, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))  # Toujours stocké en UTC
+    code = Column(String, nullable=False, default=gen_code)
+    created_at = Column(DateTime, nullable=False, default=now_utc)  # Toujours UTC
+    updated_at = Column(DateTime, nullable=False, default=now_utc, onupdate=now_utc)
 
-    def is_expired(self):
-        """Vérifie si le code est expiré après 15 minutes."""
-        if self.created_at.tzinfo is None:  # Vérifie si la date est naïve
-            self.created_at = self.created_at.replace(tzinfo=timezone.utc)  # Ajoute le fuseau UTC
+    def is_expired(self) -> bool:
+        """Retourne True si le code a expiré (plus de 15 minutes)."""
         expiration_time = self.created_at + timedelta(minutes=15)
-        return datetime.now(timezone.utc) > expiration_time  # Comparaison UTC correcte
-    
+        return now_utc() > expiration_time
+
     def update_code(self, db: Session):
+        """Génère un nouveau code et met à jour la base de données."""
         self.code = gen_code()
-        self.created_at = datetime.now(timezone.utc)
+        self.updated_at = now_utc()
         self.save_to_db(db)
+
+    def save_to_db(self, db: Session):
+        """Sauvegarde l'instance dans la base de données."""
+        db.add(self)
+        db.commit()
+        db.refresh(self)

@@ -212,11 +212,6 @@ async def register_device(
             db.add(new_device)
             db.commit()
             logger.info(f"Registered new device for user {user_id}")
-        # else:
-        #     # Update last used timestamp
-        #     existing_device.last_used_at = db.func.now()
-        #     db.commit()
-        #     logger.info(f"Updated existing device for user {user_id}")
             
         return {"message": "Device registered successfully"}
     except Exception as e:
@@ -234,11 +229,9 @@ async def send_push_notification(user_id: str, title: str, body: str, data: dict
         if not devices:
             logger.info(f"No registered devices for user {user_id}")
             return
-            
-        print('==========================================')
+
         for device in devices:
             if device.platform.lower() == 'android':
-                print('==========================================+++++++++++')
                 await send_fcm_notification(device.device_token, title, body, data)
             elif device.platform.lower() == 'ios':
                 await send_apns_notification(device.device_token, title, body, data)
