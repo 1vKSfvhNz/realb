@@ -134,3 +134,67 @@ class OrderProductAddUpdate(BaseModel):
 
 class CancelOrderRequest(BaseModel):
     comment: Optional[str] = None
+
+class OrdersGroupedResponse(BaseModel):
+    """Response model for grouped orders"""
+    orders: List[OrderResponse] = Field(..., description="All orders matching the criteria")
+    grouped_orders: Dict[str, List[OrderResponse]] = Field(..., description="Orders grouped by status")
+    count: int = Field(..., description="Total number of orders")
+    grouped_counts: Dict[str, int] = Field(..., description="Count of orders by status")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "orders": [],
+                "grouped_orders": {
+                    "all": [],
+                    "ready": [],
+                    "delivering": [],
+                    "delivered": [],
+                    "cancelled": [],
+                    "returned": []
+                },
+                "count": 0,
+                "grouped_counts": {
+                    "all": 0,
+                    "ready": 0,
+                    "delivering": 0,
+                    "delivered": 0,
+                    "cancelled": 0,
+                    "returned": 0
+                }
+            }
+        }
+
+class DeliveryOrdersGroupedResponse(BaseModel):
+    """Response model for grouped orders specifically for delivery persons"""
+    orders: List[OrderResponse] = Field(..., description="All orders matching the criteria")
+    grouped_orders: Dict[str, List[OrderResponse]] = Field(..., description="Orders grouped by status and assignment")
+    count: int = Field(..., description="Total number of orders")
+    grouped_counts: Dict[str, int] = Field(..., description="Count of orders by status and group")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "orders": [],
+                "grouped_orders": {
+                    "all": [],
+                    "ready": [],
+                    "my_deliveries": [],
+                    "others_delivering": [],
+                    "delivered": [],
+                    "cancelled": [],
+                    "returned": []
+                },
+                "count": 0,
+                "grouped_counts": {
+                    "all": 0,
+                    "ready": 0,
+                    "my_deliveries": 0,
+                    "others_delivering": 0,
+                    "delivered": 0,
+                    "cancelled": 0,
+                    "returned": 0
+                }
+            }
+        }
