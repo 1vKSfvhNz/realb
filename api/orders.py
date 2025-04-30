@@ -246,11 +246,14 @@ async def list_orders_by_deliverman(
                     )
                 )
             )
+            .order_by(Order.created_at.asc())  # Ordonner par date de création croissante (plus ancienne d'abord)
             .all()
         )    
 
         # Préparer les réponses selon le modèle OrderResponse
         response_orders = []
+        customer_orders = {}  # Dictionnaire pour regrouper par client
+        
         for order in orders:
             result = db.query(Product.image_url, Product.name, Product.currency).filter(Product.id == order.product_id).first()
             if not result:
@@ -296,7 +299,30 @@ async def list_orders_by_deliverman(
                 rating=True if order.rating else False
             )
             response_orders.append(order_response)
+            
+            # Regrouper par client
+            customer_name = order.customer.username
+            if customer_name not in customer_orders:
+                customer_orders[customer_name] = []
+            customer_orders[customer_name].append(order_response)
         
+        # NEW: Calculer le plus ancien ordre pour chaque client
+        customer_oldest_dates = {}
+        for customer_name, orders_list in customer_orders.items():
+            ready_orders = [o for o in orders_list if o.status == OrderStatus.READY.value]
+            if ready_orders:
+                # Trouver la commande la plus ancienne
+                oldest_order = min(ready_orders, key=lambda x: x.created_at)
+                customer_oldest_dates[customer_name] = oldest_order.created_at
+        
+        # NEW: Trouver le client avec la commande la plus ancienne
+        oldest_customer = None
+        oldest_date = None
+        for customer, date in customer_oldest_dates.items():
+            if oldest_date is None or date < oldest_date:
+                oldest_date = date
+                oldest_customer = customer
+                
         # Group orders by status for easy consumption by the frontend
         all_orders = response_orders
         
@@ -310,14 +336,26 @@ async def list_orders_by_deliverman(
                                 and order.delivery_person_id != user.id],
             "delivered": [order for order in all_orders if order.status == OrderStatus.DELIVERED.value],
             "cancelled": [order for order in all_orders if order.status == OrderStatus.CANCELLED.value],
-            "returned": [order for order in all_orders if order.status == OrderStatus.RETURNED.value]
+            "returned": [order for order in all_orders if order.status == OrderStatus.RETURNED.value],
         }
+        
+        # NEW: Ajouter l'information du plus ancien client et ses commandes
+        if oldest_customer:
+            grouped_orders["oldest_customer"] = {
+                "customer_name": oldest_customer,
+                "orders": customer_orders[oldest_customer],
+                "oldest_date": oldest_date.isoformat()
+            }
+        
+        # Ajouter le groupement par client
+        for customer_name, orders in customer_orders.items():
+            grouped_orders[f"customer_{customer_name}"] = orders
         
         return DeliveryOrdersGroupedResponse(
             orders=response_orders,
             grouped_orders=grouped_orders,
             count=len(response_orders),
-            grouped_counts={status: len(orders) for status, orders in grouped_orders.items()}
+            grouped_counts={status: len(orders) for status, orders in grouped_orders.items() if not isinstance(orders, dict)}
         )
         
     except Exception as e:
@@ -365,9 +403,9 @@ async def update_order_status(
 ):
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
-        if not user or (user.role != 'Admin' and user.role != 'Deliver'):
-            raise HTTPException(status_code=404, detail=get_error_key("general", "not_found"))
-
+        if not user or (user.role != 'Admin' and user.role != 'Delivery'):  # Changed 'Deliver' to 'Delivery'
+            raise HTTPException(status_code=403, detail=get_error_key("general", "forbidden"))  # Changed to 403 for forbidden access
+            
         # Récupérer la commande
         order = db.query(Order).filter(Order.id == id).first()
         if not order:
@@ -399,12 +437,14 @@ async def update_order_status(
                 },
                 user_ids=[str(order.customer_id)]
             )
-        
-        return True
+            
+        return {"success": True, "status": order.status}  # Improved return value with status information
     except Exception as e:
         db.rollback()
-        raise e
-
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))  # Add proper error handling
+    
 @router.post("/deliver_order_sum", response_model=DeliverInfo)
 async def deliver_order_sum(
     order_data: OrderBase,
