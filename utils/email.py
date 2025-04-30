@@ -49,7 +49,6 @@ async def send_email_async(to_email: str, subject: str, body_file: str, context:
             password=SMTP_PASSWORD,
         )
         print("✅ Email envoyé avec succès.")
-        print("📬 Réponse SMTP :", msg['To'])
         print("📬 Réponse SMTP :", response)
         return True
     except aiosmtplib.SMTPException as e:

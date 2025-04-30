@@ -3,58 +3,171 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nouvelle Inscription</title>
-    <link href="/static/css/tailwind.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/all.min.css">
+    <title>Bienvenue chez Real Black</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f3e8;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #ffffff;
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 1px solid #eeeeee;
+        }
+        .logo {
+            max-height: 60px;
+        }
+        .content {
+            padding: 30px 20px;
+        }
+        .welcome-icon {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .welcome-icon span {
+            display: inline-block;
+            width: 70px;
+            height: 70px;
+            line-height: 70px;
+            text-align: center;
+            background-color: #fff3e0;
+            color: #f5a623;
+            border-radius: 50%;
+            font-size: 30px;
+        }
+        .title {
+            font-size: 24px;
+            color: #333333;
+            margin-bottom: 15px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666666;
+            margin-bottom: 25px;
+        }
+        .user-info {
+            background-color: #f9f9f9;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            border: 1px solid #eeeeee;
+        }
+        .user-row {
+            display: flex;
+            align-items: center;
+        }
+        .user-icon {
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            text-align: center;
+            background-color: #f5a623;
+            color: white;
+            border-radius: 50%;
+            margin-right: 15px;
+        }
+        .verification-box {
+            margin: 25px 0;
+            text-align: center;
+        }
+        .code-container {
+            display: flex;
+            justify-content: center;
+            margin: 15px 0;
+        }
+        .code-digit {
+            display: inline-block;
+            width: 40px;
+            height: 48px;
+            line-height: 48px;
+            background-color: #f5a623;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            margin: 0 4px;
+            border-radius: 5px;
+        }
+        .expiry {
+            font-size: 14px;
+            color: #666666;
+            text-align: center;
+        }
+        .about-box {
+            background-color: #f9f9f9;
+            padding: 15px;
+            margin: 25px 0;
+            border-radius: 5px;
+            border: 1px solid #eeeeee;
+            font-style: italic;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #999999;
+            font-size: 12px;
+            border-top: 1px solid #eeeeee;
+        }
+    </style>
 </head>
-<body class="bg-gradient-to-r from-amber-50 to-orange-50 flex items-center justify-center min-h-screen p-4">
-    <div class="bg-white p-8 rounded-xl shadow-xl text-center max-w-md w-full mx-auto border-t-4 border-amber-500 transition-all duration-300 hover:shadow-2xl">
-        <div class="mb-6">
-            <div class="bg-amber-100 text-amber-600 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-4">
-                <i class="fas fa-user-plus text-3xl"></i>
-            </div>
-            <!-- Utilisation du logo avec fond blanc et initial noir -->
-            <img src="/static/img/logo_w.png" alt="Real Black" class="h-16 mx-auto mb-4">
-            <h1 class="text-2xl font-bold text-gray-800">Bienvenue dans l'univers Real Black !</h1>
-            <p class="text-gray-600 mt-2">Vous venez de créer un compte sur Real Black.</p>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://www.realblack.com/static/img/logo_w.png" alt="Real Black" class="logo" />
         </div>
         
-        <div class="mt-6 p-5 border border-gray-200 rounded-lg bg-gray-50 text-left">
-            <div class="flex items-center">
-                <div class="bg-amber-500 text-white rounded-full w-10 h-10 flex items-center justify-center mr-3">
-                    <i class="fas fa-user"></i>
-                </div>
-                <div>
-                    <p class="text-gray-500 text-sm">Nom d'utilisateur: {{ username }}</p>
-                </div>
+        <div class="content">
+            <div class="welcome-icon">
+                <span>&#128100;</span>
             </div>
-        </div>
-        
-        <div class="mt-6">
-            <p class="text-gray-700 mb-3">Pour confirmer votre inscription, veuillez utiliser le code suivant :</p>
-            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <div class="flex justify-center space-x-2">
-                    {% for digit in Code %}
-                    <div class="w-10 h-12 flex items-center justify-center bg-amber-500 text-white text-xl font-bold rounded-md shadow-sm">
-                        {{ digit }}
+            
+            <h1 class="title">Bienvenue dans l'univers Real Black !</h1>
+            <p class="subtitle">Merci d'avoir créé votre compte. Nous sommes ravis de vous accueillir.</p>
+            
+            <div class="user-info">
+                <div class="user-row">
+                    <div class="user-icon">&#128100;</div>
+                    <div>
+                        <p>Nom d'utilisateur: {{ username }}</p>
                     </div>
+                </div>
+            </div>
+            
+            <div class="verification-box">
+                <p>Pour confirmer votre inscription, veuillez utiliser le code suivant :</p>
+                
+                <div class="code-container">
+                    {% for digit in Code %}
+                    <div class="code-digit">{{ digit }}</div>
                     {% endfor %}
                 </div>
+                
+                <p class="expiry">Ce code est valable pendant 10 minutes</p>
             </div>
-            <p class="text-gray-500 text-sm mt-2">Ce code est valable pendant 10 minutes</p>
+            
+            <div class="about-box">
+                <p>
+                    Real Black est une marque de produits inspirés de l'Afrique. Nous créons des pièces
+                    uniques qui célèbrent la richesse culturelle du continent africain à travers des designs
+                    contemporains et audacieux.
+                </p>
+            </div>
         </div>
         
-        <div class="mt-6 p-5 border border-gray-200 rounded-lg bg-gray-50 text-left">
-            <p class="text-gray-700 italic">
-                Real Black est une marque de produit inspirée de l'Afrique. Nous créons des pièces
-                uniques qui célèbrent la richesse culturelle du continent africain à travers des designs
-                contemporains et audacieux.
-            </p>
+        <div class="footer">
+            <p>&copy; 2025 Real Black | <a href="https://www.realblack.com/contact">Contact</a> | <a href="https://www.realblack.com/unsubscribe">Se désabonner</a></p>
         </div>
-    </div>
-    
-    <div class="text-center text-gray-500 text-xs mt-4">
-        <p>&copy; 2025 Real Black.</p>
     </div>
 </body>
 </html>
