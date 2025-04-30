@@ -86,43 +86,44 @@ async def update_notification_preference(
 
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
-    # Accept connection before any verification
-    await websocket.accept()
-    
     token = websocket.query_params.get("token")
     if not token:
         logger.warning("❌ Missing token")
         await websocket.close(code=1008, reason="Missing token")
         return
-
+    
+    logger.info(f"🔄 Verifying token: {token[:10]}...")
+    user = get_current_user_from_token(token)
+    
+    # Accept the connection BEFORE any database operations
+    await websocket.accept()
+    
     user_id = None
     db = None
     
     try:
-        # Vérifier le token sans connexion DB
-        logger.info(f"🔄 Verifying token: {token[:10]}...")
-        user = get_current_user_from_token(token)
+        # Verify the token without DB connection
         user_id = str(user["id"])
         
         logger.info(f"✅ Valid token for user: {user_id}")
-
-        # Créer une session DB uniquement quand nécessaire
+        
+        # Create a DB session only when necessary
         db = SessionLocal()
         
-        # Requête optimisée en une seule fois
+        # Optimized query all at once
         user_info = db.query(User.role, User.notifications, User.username).filter(User.id == user_id).first()
         if not user_info:
             logger.warning(f"❌ User {user_id} not found in database")
             await websocket.close(code=1008, reason="User not found")
             return
-
+        
         role, notifications_enabled, username = user_info
         
-        # Fermer la connexion DB dès que possible
+        # Close the DB connection as soon as possible
         db.close()
         db = None
         
-        # Stocker la connexion avec les métadonnées
+        # Store the connection with metadata
         connections[user_id] = {
             'role': role,
             'ws': websocket,
@@ -130,22 +131,22 @@ async def websocket_notifications(websocket: WebSocket):
             'username': username
         }
         
-        # Confirmation au client
+        # Confirmation to the client
         await websocket.send_json({
             "type": "connection_status",
             "status": "connected",
             "role": role,
             "notifications_enabled": notifications_enabled
         })
-
+        
         update_livreur_references()
-
-        # Boucle principale - n'utilise la DB que lorsque nécessaire
+        
+        # Main loop - only use the DB when necessary
         while True:
             message = await websocket.receive_json()
             
             if message.get("type") == "set_notification_preference":
-                # Ouvrir la connexion DB uniquement pour l'opération
+                # Open DB connection only for this operation
                 db = SessionLocal()
                 new_setting = message.get("enabled", True)
                 user_obj = db.query(User).filter(User.id == user_id).first()
@@ -154,17 +155,17 @@ async def websocket_notifications(websocket: WebSocket):
                 db.close()
                 db = None
                 
-                # Mettre à jour le cache
+                # Update the cache
                 connections[user_id]['notifications_enabled'] = new_setting
                 
-                # Confirmer au client
+                # Confirm to the client
                 await websocket.send_json({
                     "type": "notification_preference_updated",
                     "enabled": new_setting
                 })
             else:
                 logger.info(f"Received unhandled message type: {message.get('type')}")
-
+    
     except WebSocketDisconnect:
         logger.info(f"🔌 WebSocket disconnection ({user_id})")
     except Exception as e:
@@ -176,10 +177,10 @@ async def websocket_notifications(websocket: WebSocket):
         except:
             pass
     finally:
-        # Fermer la connexion DB si elle existe
+        # Close the DB connection if it exists
         if db:
             db.close()
-            
+        
         if user_id and user_id in connections:
             connections.pop(user_id)
             logger.info(f"🚫 User disconnected: {user_id}")

@@ -40,7 +40,6 @@ def send_email_sync(to_email: str, subject: str, body_file: str, context: dict):
 async def send_email_async(to_email: str, subject: str, body_file: str, context: dict):
     msg = send_email_init(to_email, subject, body_file, context)
     try:
-        print(SMTP_PASSWORD)
         response = await aiosmtplib.send(
             msg,
             hostname=SMTP_HOST,
