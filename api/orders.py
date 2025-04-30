@@ -341,11 +341,14 @@ async def list_orders_by_deliverman(
         
         # NEW: Ajouter l'information du plus ancien client et ses commandes
         if oldest_customer:
-            grouped_orders["oldest_customer"] = {
+            # Stocker l'objet sous forme de dictionnaire plutôt que de liste
+            oldest_customer_data = {
                 "customer_name": oldest_customer,
                 "orders": customer_orders[oldest_customer],
                 "oldest_date": oldest_date.isoformat()
             }
+            # Assigner à la clé "oldest_customer"
+            grouped_orders["oldest_customer"] = oldest_customer_data
         
         # Ajouter le groupement par client
         for customer_name, orders in customer_orders.items():

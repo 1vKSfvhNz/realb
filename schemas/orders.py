@@ -1,4 +1,5 @@
 from . import BaseModel, Enum, Field, Optional, datetime, List, Dict
+from typing import Union
 
 # Énumérations pour les schémas
 class OrderStatusEnum(str, Enum):
@@ -166,39 +167,13 @@ class OrdersGroupedResponse(BaseModel):
             }
         }
 
-class DeliveryOrdersGroupedResponse(BaseModel):
-    """Response model for grouped orders specifically for delivery persons"""
-    orders: List[OrderResponse] = Field(..., description="All orders matching the criteria")
-    grouped_orders: Dict[str, List[OrderResponse]] = Field(..., description="Orders grouped by status, assignment, and customer")
-    count: int = Field(..., description="Total number of orders")
-    grouped_counts: Dict[str, int] = Field(..., description="Count of orders by status and group")
+class OldestCustomerGroup(BaseModel):
+    customer_name: str
+    orders: List[OrderResponse]  # Assuming OrderResponse is imported or defined above
+    oldest_date: str
 
-    class Config:
-        schema_extra = {
-            "example": {
-                "orders": [],
-                "grouped_orders": {
-                    "all": [],
-                    "ready": [],
-                    "my_deliveries": [],
-                    "others_delivering": [],
-                    "delivered": [],
-                    "cancelled": [],
-                    "returned": [],
-                    "customer_John": [],  # Exemple de groupe par client
-                    "customer_Jane": []   # Exemple de groupe par client
-                },
-                "count": 0,
-                "grouped_counts": {
-                    "all": 0,
-                    "ready": 0,
-                    "my_deliveries": 0,
-                    "others_delivering": 0,
-                    "delivered": 0,
-                    "cancelled": 0,
-                    "returned": 0,
-                    "customer_John": 0,   # Compte pour le client John
-                    "customer_Jane": 0    # Compte pour le client Jane
-                }
-            }
-        }
+class DeliveryOrdersGroupedResponse(BaseModel):
+    orders: List[OrderResponse]
+    grouped_orders: Dict[str, Union[List[OrderResponse], OldestCustomerGroup]]
+    count: int
+    grouped_counts: Dict[str, int]
