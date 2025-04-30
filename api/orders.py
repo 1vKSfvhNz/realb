@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException
 from geopy.distance import geodesic
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, joinedload
@@ -12,16 +12,6 @@ from config import get_error_key, BASE_URL
 from .notifications import notify_users
 
 router = APIRouter()
-
-# Schémas pour les commandes
-class OrderBase(DeliveryCoordinates):
-    product_id: int
-    quantity: int = Field(gt=0)
-    delivery_notes: Optional[str] = None
-    payment_method: Optional[PaymentMethodEnum] = None
-
-class OrderCreate(OrderBase):
-    pass
 
 @router.post("/create_order")
 async def create_order(
@@ -88,39 +78,26 @@ async def create_order(
             message={
                 "type": "new_order",
                 "command_id": new_order.id,
-                "message": user.username,
-                "title": "Nouvelle commande!",  # Pour les notifications push
-                "body": f"Nouvelle commande de {user.username}",  # Pour les notifications push
-                "data": {  # Données supplémentaires pour les notifications push
-                    "order_id": new_order.id,
-                    "action": "view_order"
-                }
+                "message": user.username
             },
-            roles=["deliver", "admin"]
+            roles=["deliver", "admin"]  # Notifier tous les livreurs et admins
         )
         return {"message": "Commande créée", "order_id": new_order.id}
     except Exception as e:
         db.rollback()
         raise e
 
-@router.get("/list_orders", response_model=OrdersGroupedResponse)
+@router.get("/list_orders", response_model=list[OrderResponse])
 async def list_orders(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Retrieves and groups orders for the current user by status.
-    
-    Returns:
-        OrdersGroupedResponse: An object containing orders grouped by status and all orders.
-    """
     try:
-        # Get current user
         user = db.query(User).filter(User.email == current_user['email']).first()
         if not user:
             raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
         
-        # Define which orders to retrieve
+        # Récupérer toutes les commandes de l'utilisateur
         expiry_time = datetime.utcnow() - timedelta(days=3)
         orders = (
             db.query(Order)
@@ -136,26 +113,21 @@ async def list_orders(
                     ),
                 )
             )
-            .order_by(Order.created_at.desc())  # Most recent orders first
             .all()
         )
-        
-        # Prepare response data
+
+        # Préparer les réponses selon le modèle OrderResponse
         response_orders = []
-        customer_groups = {}  # Regrouper par client/créateur
         for order in orders:
-            # Get product details
-            result = db.query(Product.image_url, Product.name, Product.currency).filter(
-                Product.id == order.product_id
-            ).first()
-            
+            result = db.query(Product.image_url, Product.name, Product.currency).filter(Product.id == order.product_id).first()
             if not result:
-                continue  # Skip orders with missing products instead of failing
+                raise HTTPException(status_code=404, detail=get_error_key("products", "not_found"))
             
-            # Format product info
-            image_url = f"{BASE_URL}{result.image_url}" if result.image_url else None
-            
-            # Create response object
+            image_url = BASE_URL + result.image_url if result else None
+            product_name = result.name if result else None 
+            currency = result.currency if result else None 
+                    
+            # Créer un objet de réponse conforme au modèle
             order_response = OrderResponse(
                 id=order.id,
                 order_number=order.order_number,
@@ -164,8 +136,8 @@ async def list_orders(
                 customer_phone=user.phone,
                 product_id=order.product_id,
                 product_url=image_url,
-                product_name=result.name,
-                currency=result.currency,
+                product_name=product_name,
+                currency=currency,
                 quantity=order.quantity,
                 status=order.status,
                 payment_status=order.payment_status,
@@ -191,55 +163,13 @@ async def list_orders(
                 rating=True if order.rating else False
             )
             response_orders.append(order_response)
-            
-            # Regrouper les commandes par client/créateur 
-            creator_name = user.username
-            
-            if creator_name not in customer_groups:
-                customer_groups[creator_name] = {
-                    "orders": [],
-                    "first_order_date": order.created_at
-                }
-            
-            customer_groups[creator_name]["orders"].append(order_response)
-            
-            # Mettre à jour la première date de commande si cette commande est plus ancienne
-            if order.created_at < customer_groups[creator_name]["first_order_date"]:
-                customer_groups[creator_name]["first_order_date"] = order.created_at
         
-        # Group orders by status for easy consumption by the frontend
-        grouped_orders = {
-            "all": response_orders,
-            "ready": [order for order in response_orders if order.status == OrderStatus.READY.value],
-            "delivering": [order for order in response_orders if order.status == OrderStatus.DELIVERING.value],
-            "delivered": [order for order in response_orders if order.status == OrderStatus.DELIVERED.value],
-            "cancelled": [order for order in response_orders if order.status == OrderStatus.CANCELLED.value],
-            "returned": [order for order in response_orders if order.status == OrderStatus.RETURNED.value]
-        }
-        
-        # Convertir les groupes de créateurs en format approprié
-        creators_groups = {}
-        for creator_name, group_data in customer_groups.items():
-            creators_groups[creator_name] = CreatorGroup(
-                creator_name=creator_name,
-                orders=group_data["orders"],
-                first_order_date=group_data["first_order_date"].isoformat()
-            )
-        
-        return OrdersGroupedResponse(
-            orders=response_orders,
-            grouped_orders=grouped_orders,
-            grouped_by_creator=creators_groups,  # Ajouter le regroupement par créateur
-            count=len(response_orders),
-            grouped_counts={status: len(orders) for status, orders in grouped_orders.items()}
-        )
-        
+        return response_orders
     except Exception as e:
         db.rollback()
-        # Log the error here
-        raise HTTPException(status_code=500, detail=str(e))
+        raise e
 
-@router.get("/list_orders_by_deliverman", response_model=DeliveryOrdersGroupedResponse)
+@router.get("/list_orders_by_deliverman", response_model=list[OrderResponse])
 async def list_orders_by_deliverman(
     current_user: dict = Depends(get_current_user),
 ):
@@ -272,14 +202,11 @@ async def list_orders_by_deliverman(
                     )
                 )
             )
-            .order_by(Order.created_at.asc())  # Ordonner par date de création croissante (plus ancienne d'abord)
             .all()
         )    
 
         # Préparer les réponses selon le modèle OrderResponse
         response_orders = []
-        customer_groups = {}  # Structure pour regrouper par client
-        
         for order in orders:
             result = db.query(Product.image_url, Product.name, Product.currency).filter(Product.id == order.product_id).first()
             if not result:
@@ -319,138 +246,16 @@ async def list_orders_by_deliverman(
                 delivered_at=order.delivered_at,
                 cancelled_at=order.cancelled_at,
                 purchase_time=order.purchase_time,
-                delivery_person_id=order.delivery_person_id,
-                delivery_person_name=user.username if order.delivery_person_id == user.id else '',
-                delivery_person_phone=user.phone if order.delivery_person_id == user.id else '',
                 rating=True if order.rating else False
             )
             response_orders.append(order_response)
-            
-            # Regrouper par client avec la date de la première commande
-            customer_name = order.customer.username
-            if customer_name not in customer_groups:
-                customer_groups[customer_name] = {
-                    "orders": [],
-                    "first_order_date": order.created_at
-                }
-            
-            customer_groups[customer_name]["orders"].append(order_response)
-            
-            # Mettre à jour la première date de commande si cette commande est plus ancienne
-            if order.created_at < customer_groups[customer_name]["first_order_date"]:
-                customer_groups[customer_name]["first_order_date"] = order.created_at
         
-        # Group orders by status for easy consumption by the frontend
-        all_orders = response_orders
-        
-        # Groupement par statut 
-        grouped_orders = {
-            "all": all_orders,
-            "ready": [order for order in all_orders if order.status == OrderStatus.READY.value],
-            "my_deliveries": [order for order in all_orders if order.status == OrderStatus.DELIVERING.value 
-                             and order.delivery_person_id == user.id],
-            "others_delivering": [order for order in all_orders if order.status == OrderStatus.DELIVERING.value 
-                                and order.delivery_person_id != user.id],
-            "delivered": [order for order in all_orders if order.status == OrderStatus.DELIVERED.value],
-            "cancelled": [order for order in all_orders if order.status == OrderStatus.CANCELLED.value],
-            "returned": [order for order in all_orders if order.status == OrderStatus.RETURNED.value],
-        }
-        
-        # Trouver le client avec la commande la plus ancienne
-        oldest_customer = None
-        oldest_date = None
-        
-        for customer_name, group_data in customer_groups.items():
-            if oldest_date is None or group_data["first_order_date"] < oldest_date:
-                oldest_date = group_data["first_order_date"]
-                oldest_customer = customer_name
-        
-        # Ajouter l'information du plus ancien client
-        if oldest_customer:
-            # Créer un groupe pour le client le plus ancien
-            grouped_orders["oldest_customer"] = CustomerGroup(
-                customer_name=oldest_customer,
-                orders=customer_groups[oldest_customer]["orders"],
-                first_order_date=oldest_date.isoformat()
-            )
-        
-        # Créer les groupes par client formatés correctement
-        customer_groups_formatted = {}
-        for customer_name, group_data in customer_groups.items():
-            customer_groups_formatted[f"customer_{customer_name}"] = CustomerGroup(
-                customer_name=customer_name,
-                orders=group_data["orders"],
-                first_order_date=group_data["first_order_date"].isoformat()
-            )
-        
-        # Ajouter tous les groupes de clients à grouped_orders
-        grouped_orders.update(customer_groups_formatted)
-        
-        return DeliveryOrdersGroupedResponse(
-            orders=response_orders,
-            grouped_orders=grouped_orders,
-            count=len(response_orders),
-            grouped_counts={
-                status: len(orders) for status, orders in grouped_orders.items() 
-                if isinstance(orders, list)  # Ne compte que les listes, pas les objets CustomerGroup
-            }
-        )
-        
+        return response_orders
     except Exception as e:
         db.rollback()
         raise e
     finally:
         db.close()  # Important: fermer la session pour libérer la connexion
-
-@router.post("/update_order_status/{id}")
-async def update_order_status(
-    id: int,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    try:
-        user = db.query(User).filter(User.email == current_user['email']).first()
-        if not user or (user.role != 'Admin' and user.role != 'Delivery'):  # Changed 'Deliver' to 'Delivery'
-            raise HTTPException(status_code=403, detail=get_error_key("general", "forbidden"))  # Changed to 403 for forbidden access
-            
-        # Récupérer la commande
-        order = db.query(Order).filter(Order.id == id).first()
-        if not order:
-            raise HTTPException(status_code=404, detail=get_error_key("orders", "not_found"))
-            
-        if order.status == OrderStatus.READY.value:  # Note: compare with value
-            order.start_delivery(user.id, db)
-            
-            # Notifier le client que sa commande est en cours de livraison
-            await notify_users(
-                message={
-                    "type": "order_status_update",
-                    "order_id": id,
-                    "status": "delivering",
-                    "message": user.username
-                },
-                user_ids=[str(order.customer_id)]
-            )
-            
-        elif order.status == OrderStatus.DELIVERING.value:
-            order.mark_as_delivered(db)
-            
-            # Notifier le client que sa commande a été livrée
-            await notify_users(
-                message={
-                    "type": "order_status_update",
-                    "order_id": id,
-                    "status": "delivered",
-                },
-                user_ids=[str(order.customer_id)]
-            )
-            
-        return {"success": True, "status": order.status}  # Improved return value with status information
-    except Exception as e:
-        db.rollback()
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=str(e))  # Add proper error handling
 
 @router.post("/cancel_order/{id}")
 async def cancel_order(
@@ -482,7 +287,55 @@ async def cancel_order(
     except Exception as e:
         db.rollback()
         raise e
-    
+
+@router.post("/update_order_status/{id}")
+async def update_order_status(
+    id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        user = db.query(User).filter(User.email == current_user['email']).first()
+        if not user or (user.role != 'Admin' and user.role != 'Livreur'):
+            raise HTTPException(status_code=404, detail=get_error_key("general", "not_found"))
+
+        # Récupérer la commande
+        order = db.query(Order).filter(Order.id == id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail=get_error_key("orders", "not_found"))
+            
+        if order.status == OrderStatus.READY.value:  # Note: compare with value
+            order.start_delivery(user.id, db)
+            
+            # Notifier le client que sa commande est en cours de livraison
+            await notify_users(
+                message={
+                    "type": "order_status_update",
+                    "order_id": id,
+                    "status": "delivering",
+                    "message": user.username
+                },
+                user_ids=[str(order.customer_id)]
+            )
+            
+        elif order.status == OrderStatus.DELIVERING.value:
+            order.mark_as_delivered(db)
+            
+            # Notifier le client que sa commande a été livrée
+            await notify_users(
+                message={
+                    "type": "order_status_update",
+                    "order_id": id,
+                    "status": "delivered",
+                },
+                user_ids=[str(order.customer_id)]
+            )
+        
+        return True
+    except Exception as e:
+        db.rollback()
+        raise e
+
 @router.post("/deliver_order_sum", response_model=DeliverInfo)
 async def deliver_order_sum(
     order_data: OrderBase,
