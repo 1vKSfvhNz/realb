@@ -37,10 +37,20 @@ def send_email_sync(to_email: str, subject: str, body_file: str, context: dict):
         server.login(SMTP_USER, SMTP_PASSWORD)
         server.send_message(msg)
 
-# Fonction asynchrone
 async def send_email_async(to_email: str, subject: str, body_file: str, context: dict):
     msg = send_email_init(to_email, subject, body_file, context)
-    print(msg)
-    print('==============================================')
-    print(SMTP_USER)
-    await aiosmtplib.send(msg, hostname=SMTP_HOST, port=SMTP_PORT, start_tls=True, username=SMTP_USER, password=SMTP_PASSWORD)
+    try:
+        response = await aiosmtplib.send(
+            msg,
+            hostname=SMTP_HOST,
+            port=SMTP_PORT,
+            start_tls=True,
+            username=SMTP_USER,
+            password=SMTP_PASSWORD,
+        )
+        print("✅ Email envoyé avec succès.")
+        print("📬 Réponse SMTP :", response)
+        return True
+    except aiosmtplib.SMTPException as e:
+        print("❌ Échec de l'envoi de l'email :", e)
+        return False
