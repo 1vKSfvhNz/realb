@@ -142,6 +142,7 @@ async def list_orders(
         
         # Prepare response data
         response_orders = []
+        customer_groups = {}  # Regrouper par client/créateur
         for order in orders:
             # Get product details
             result = db.query(Product.image_url, Product.name, Product.currency).filter(
@@ -190,6 +191,21 @@ async def list_orders(
                 rating=True if order.rating else False
             )
             response_orders.append(order_response)
+            
+            # Regrouper les commandes par client/créateur 
+            creator_name = user.username
+            
+            if creator_name not in customer_groups:
+                customer_groups[creator_name] = {
+                    "orders": [],
+                    "first_order_date": order.created_at
+                }
+            
+            customer_groups[creator_name]["orders"].append(order_response)
+            
+            # Mettre à jour la première date de commande si cette commande est plus ancienne
+            if order.created_at < customer_groups[creator_name]["first_order_date"]:
+                customer_groups[creator_name]["first_order_date"] = order.created_at
         
         # Group orders by status for easy consumption by the frontend
         grouped_orders = {
@@ -201,9 +217,19 @@ async def list_orders(
             "returned": [order for order in response_orders if order.status == OrderStatus.RETURNED.value]
         }
         
+        # Convertir les groupes de créateurs en format approprié
+        creators_groups = {}
+        for creator_name, group_data in customer_groups.items():
+            creators_groups[creator_name] = CreatorGroup(
+                creator_name=creator_name,
+                orders=group_data["orders"],
+                first_order_date=group_data["first_order_date"].isoformat()
+            )
+        
         return OrdersGroupedResponse(
             orders=response_orders,
             grouped_orders=grouped_orders,
+            grouped_by_creator=creators_groups,  # Ajouter le regroupement par créateur
             count=len(response_orders),
             grouped_counts={status: len(orders) for status, orders in grouped_orders.items()}
         )
@@ -252,7 +278,7 @@ async def list_orders_by_deliverman(
 
         # Préparer les réponses selon le modèle OrderResponse
         response_orders = []
-        customer_orders = {}  # Dictionnaire pour regrouper par client
+        customer_groups = {}  # Structure pour regrouper par client
         
         for order in orders:
             result = db.query(Product.image_url, Product.name, Product.currency).filter(Product.id == order.product_id).first()
@@ -300,33 +326,24 @@ async def list_orders_by_deliverman(
             )
             response_orders.append(order_response)
             
-            # Regrouper par client
+            # Regrouper par client avec la date de la première commande
             customer_name = order.customer.username
-            if customer_name not in customer_orders:
-                customer_orders[customer_name] = []
-            customer_orders[customer_name].append(order_response)
+            if customer_name not in customer_groups:
+                customer_groups[customer_name] = {
+                    "orders": [],
+                    "first_order_date": order.created_at
+                }
+            
+            customer_groups[customer_name]["orders"].append(order_response)
+            
+            # Mettre à jour la première date de commande si cette commande est plus ancienne
+            if order.created_at < customer_groups[customer_name]["first_order_date"]:
+                customer_groups[customer_name]["first_order_date"] = order.created_at
         
-        # NEW: Calculer le plus ancien ordre pour chaque client
-        customer_oldest_dates = {}
-        for customer_name, orders_list in customer_orders.items():
-            ready_orders = [o for o in orders_list if o.status == OrderStatus.READY.value]
-            if ready_orders:
-                # Trouver la commande la plus ancienne
-                oldest_order = min(ready_orders, key=lambda x: x.created_at)
-                customer_oldest_dates[customer_name] = oldest_order.created_at
-        
-        # NEW: Trouver le client avec la commande la plus ancienne
-        oldest_customer = None
-        oldest_date = None
-        for customer, date in customer_oldest_dates.items():
-            if oldest_date is None or date < oldest_date:
-                oldest_date = date
-                oldest_customer = customer
-                
         # Group orders by status for easy consumption by the frontend
         all_orders = response_orders
         
-        # Nouveau groupement amélioré - groupé par statut et assignation
+        # Groupement par statut 
         grouped_orders = {
             "all": all_orders,
             "ready": [order for order in all_orders if order.status == OrderStatus.READY.value],
@@ -339,26 +356,44 @@ async def list_orders_by_deliverman(
             "returned": [order for order in all_orders if order.status == OrderStatus.RETURNED.value],
         }
         
-        # NEW: Ajouter l'information du plus ancien client et ses commandes
-        if oldest_customer:
-            # Stocker l'objet sous forme de dictionnaire plutôt que de liste
-            oldest_customer_data = {
-                "customer_name": oldest_customer,
-                "orders": customer_orders[oldest_customer],
-                "oldest_date": oldest_date.isoformat()
-            }
-            # Assigner à la clé "oldest_customer"
-            grouped_orders["oldest_customer"] = oldest_customer_data
+        # Trouver le client avec la commande la plus ancienne
+        oldest_customer = None
+        oldest_date = None
         
-        # Ajouter le groupement par client
-        for customer_name, orders in customer_orders.items():
-            grouped_orders[f"customer_{customer_name}"] = orders
+        for customer_name, group_data in customer_groups.items():
+            if oldest_date is None or group_data["first_order_date"] < oldest_date:
+                oldest_date = group_data["first_order_date"]
+                oldest_customer = customer_name
+        
+        # Ajouter l'information du plus ancien client
+        if oldest_customer:
+            # Créer un groupe pour le client le plus ancien
+            grouped_orders["oldest_customer"] = CustomerGroup(
+                customer_name=oldest_customer,
+                orders=customer_groups[oldest_customer]["orders"],
+                first_order_date=oldest_date.isoformat()
+            )
+        
+        # Créer les groupes par client formatés correctement
+        customer_groups_formatted = {}
+        for customer_name, group_data in customer_groups.items():
+            customer_groups_formatted[f"customer_{customer_name}"] = CustomerGroup(
+                customer_name=customer_name,
+                orders=group_data["orders"],
+                first_order_date=group_data["first_order_date"].isoformat()
+            )
+        
+        # Ajouter tous les groupes de clients à grouped_orders
+        grouped_orders.update(customer_groups_formatted)
         
         return DeliveryOrdersGroupedResponse(
             orders=response_orders,
             grouped_orders=grouped_orders,
             count=len(response_orders),
-            grouped_counts={status: len(orders) for status, orders in grouped_orders.items() if not isinstance(orders, dict)}
+            grouped_counts={
+                status: len(orders) for status, orders in grouped_orders.items() 
+                if isinstance(orders, list)  # Ne compte que les listes, pas les objets CustomerGroup
+            }
         )
         
     except Exception as e:
@@ -366,37 +401,6 @@ async def list_orders_by_deliverman(
         raise e
     finally:
         db.close()  # Important: fermer la session pour libérer la connexion
-
-@router.post("/cancel_order/{id}")
-async def cancel_order(
-    id: int,
-    body: CancelOrderRequest,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    try:
-        user = db.query(User).filter(User.email == current_user['email']).first()
-        if not user:
-            raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
-
-        # Récupérer la commande
-        order = db.query(Order).filter(Order.id == id).first()
-        if not order:
-            raise HTTPException(status_code=404, detail=get_error_key("orders", "not_found"))
-        
-        if not order.cancel_order(db) and body.comment is not None:
-            new_rate = OrderRating(
-                order_id=order.id,
-                rating=0,
-                comment=body.comment.strip()
-            )
-            save_to_db(new_rate, db)
-            order.return_order(db)
-            
-        return True
-    except Exception as e:
-        db.rollback()
-        raise e
 
 @router.post("/update_order_status/{id}")
 async def update_order_status(
@@ -447,6 +451,37 @@ async def update_order_status(
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=str(e))  # Add proper error handling
+
+@router.post("/cancel_order/{id}")
+async def cancel_order(
+    id: int,
+    body: CancelOrderRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        user = db.query(User).filter(User.email == current_user['email']).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
+
+        # Récupérer la commande
+        order = db.query(Order).filter(Order.id == id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail=get_error_key("orders", "not_found"))
+        
+        if not order.cancel_order(db) and body.comment is not None:
+            new_rate = OrderRating(
+                order_id=order.id,
+                rating=0,
+                comment=body.comment.strip()
+            )
+            save_to_db(new_rate, db)
+            order.return_order(db)
+            
+        return True
+    except Exception as e:
+        db.rollback()
+        raise e
     
 @router.post("/deliver_order_sum", response_model=DeliverInfo)
 async def deliver_order_sum(
