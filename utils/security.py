@@ -7,7 +7,7 @@ from typing import Optional
 import jwt
 from argon2 import PasswordHasher
 from jwt import ExpiredSignatureError, PyJWTError
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 load_dotenv()
@@ -42,19 +42,46 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     except PyJWTError as e:
         raise ValueError(f"Invalid token: {str(e)}")
 
-# Ajoutez cette fonction dans utils/security.py
+# À mettre à jour dans utils/security.py
+
 def get_current_user_from_token(token: str) -> dict:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        id: str = payload.get("id")
-        if not (email and id) :
-            raise ValueError("Invalid token - missing sub claim")
-        return {"email": email, "id": id}
+        # Décodage du token avec vérification stricte
+        payload = jwt.decode(
+            token, 
+            SECRET_KEY, 
+            algorithms=[ALGORITHM],
+            options={"verify_signature": True, "verify_exp": True}
+        )
+        
+        # Extraction et vérification des claims
+        email = payload.get("sub")
+        user_id = payload.get("id")
+        
+        # Vérification plus stricte
+        if not email:
+            raise ValueError("Token invalide - champ 'sub' (email) manquant")
+        if user_id is None:  # Permettre 0 comme ID valide
+            raise ValueError("Token invalide - champ 'id' manquant")
+            
+        # Logger les informations de débogage
+        expiry = payload.get("exp")
+        now = datetime.now().timestamp()
+        if expiry:
+            remaining_time = expiry - now
+            print(f"DEBUG - Token valide, expire dans {remaining_time:.2f} secondes")
+        
+        return {"email": email, "id": user_id}
+        
     except ExpiredSignatureError:
-        raise ValueError("Token expired")
+        print("DEBUG - Token expiré")
+        raise ValueError("Token expiré")
     except PyJWTError as e:
-        raise ValueError(f"Invalid token: {str(e)}")
+        print(f"DEBUG - Erreur PyJWT: {str(e)}")
+        raise ValueError(f"Token invalide: {str(e)}")
+    except Exception as e:
+        print(f"DEBUG - Erreur inattendue: {str(e)}")
+        raise ValueError(f"Erreur de validation du token: {str(e)}")
 
 # ✅ 
 def gen_passw(init: str='', length: int=16) -> str:
