@@ -72,7 +72,7 @@ async def update_notification_preference(
         if user_id in connections:
             try:
                 await connections[user_id]['ws'].send_json({
-                    "type": "notification_preference_updated",
+                    "type": preference.preference_type,
                     "enabled": preference.enabled
                 })
             except Exception as ws_error:
@@ -349,7 +349,6 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
             continue
             
         info = connections.get(user_id)
-        print("dddddddddddddddddddddddddddddd", info)
         try:
             await info['ws'].send_json(message)
         except Exception as ws_error:
