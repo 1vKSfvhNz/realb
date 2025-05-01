@@ -93,18 +93,15 @@ async def websocket_notifications(websocket: WebSocket):
         return
     
     logger.info(f"🔄 Verifying token: {token[:10]}...")
-    user = get_current_user_from_token(token=token)
-    
-    # Accept the connection BEFORE any database operations
-    await websocket.accept()
-    
-    user_id = None
-    db = None
     
     try:
-        # Verify the token without DB connection
-        user_id = str(user["id"])
+        # Verify the token without DB connection first
+        user = get_current_user_from_token(token=token)
         
+        # If token verification passes, THEN accept the connection
+        await websocket.accept()
+        
+        user_id = str(user["id"])
         logger.info(f"✅ Valid token for user: {user_id}")
         
         # Create a DB session only when necessary
@@ -115,6 +112,7 @@ async def websocket_notifications(websocket: WebSocket):
         if not user_info:
             logger.warning(f"❌ User {user_id} not found in database")
             await websocket.close(code=1008, reason="User not found")
+            db.close()
             return
         
         role, notifications_enabled, username = user_info
@@ -166,22 +164,28 @@ async def websocket_notifications(websocket: WebSocket):
             else:
                 logger.info(f"Received unhandled message type: {message.get('type')}")
     
-    except WebSocketDisconnect:
-        logger.info(f"🔌 WebSocket disconnection ({user_id})")
     except Exception as e:
-        logger.error(f"❌ WebSocket error ({user_id if user_id else 'unknown'}): {str(e)}")
-        if db:
+        logger.error(f"❌ WebSocket error: {str(e)}")
+        if 'db' in locals() and db:
             db.rollback()
-        try:
-            await websocket.close(code=1008, reason=f"Error: {str(e)[:50]}")
-        except:
-            pass
-    finally:
-        # Close the DB connection if it exists
-        if db:
             db.close()
         
-        if user_id and user_id in connections:
+        # If the connection hasn't been accepted yet, we can't close it normally
+        # Only try to close if we've accepted the connection
+        if websocket.client_state != WebSocket.client_state.DISCONNECTED:
+            try:
+                await websocket.close(code=1008, reason=f"Error: {str(e)[:50]}")
+            except:
+                pass
+        return
+    except WebSocketDisconnect:
+        logger.info(f"🔌 WebSocket disconnection ({user_id if 'user_id' in locals() else 'unknown'})")
+    finally:
+        # Close the DB connection if it exists
+        if 'db' in locals() and db:
+            db.close()
+        
+        if 'user_id' in locals() and user_id in connections:
             connections.pop(user_id)
             logger.info(f"🚫 User disconnected: {user_id}")
             update_livreur_references()
