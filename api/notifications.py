@@ -40,6 +40,7 @@ async def get_notification_preference(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    print(connections)
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
         if not user:
@@ -58,6 +59,7 @@ async def update_notification_preference(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    print(connections)
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
         if not user:
@@ -86,6 +88,7 @@ async def update_notification_preference(
 
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
+    print(connections)
     token = websocket.query_params.get("token")
     if not token:
         logger.warning("❌ Token manquant")
@@ -196,6 +199,7 @@ async def register_device(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    print(connections)
     try:
         # Register the device token for the user
         user_id = current_user['id']
