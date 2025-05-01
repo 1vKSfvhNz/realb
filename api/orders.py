@@ -99,7 +99,7 @@ async def list_orders(
             raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
         
         # Récupérer toutes les commandes de l'utilisateur
-        expiry_time = datetime.utcnow() - timedelta(days=3)
+        expiry_time = datetime.utcnow() - timedelta(minutes=3)
         orders = (
             db.query(Order)
             .options(joinedload(Order.delivery_person), joinedload(Order.rating))
@@ -181,7 +181,7 @@ async def list_orders_by_deliverman(
             raise HTTPException(status_code=404, detail=get_error_key("general", "not_found"))
         
         # Récupérer toutes les commandes de l'utilisateur
-        expiry_time = datetime.now() - timedelta(days=2)
+        expiry_time = datetime.now() - timedelta(minutes=3)
         orders = (
             db.query(Order)
             .options(joinedload(Order.customer), joinedload(Order.rating))  # charge les données du client en même temps que la commande
