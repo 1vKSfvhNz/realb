@@ -347,8 +347,8 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
         if not notifications_enabled:
             continue
             
-        print("ffffffffffffffffffffffff", connections)
-        if user_id in connections:
+        print(connections)
+        if user_id in user_ids:
             info = connections.get(user_id)
             print("dddddddddddddddddddddddddddddd", info)
             try:
