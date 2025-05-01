@@ -86,99 +86,94 @@ async def update_notification_preference(
 
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
-    print('====================================1')
     token = websocket.query_params.get("token")
     if not token:
         logger.warning("❌ Token manquant")
         await websocket.close(code=1008, reason="Token manquant")
         return
-    print('====================================2')
     
     logger.info(f"🔄 Vérification du token: {token[:10]}...")
     
     try:
         # Vérifier le token avant d'accepter la connexion
-        user = None
         try:
             user = get_current_user_from_token(token=token)
-            print('====================================3')
+            if not user:
+                logger.error("❌ Utilisateur non trouvé après vérification du token")
+                await websocket.close(code=1008, reason="Utilisateur non trouvé")
+                return
+                
+            # Seulement si l'authentification réussit, accepter la connexion
+            await websocket.accept()
+            
+            user_id = str(user["id"])
+            logger.info(f"✅ Token valide pour l'utilisateur: {user_id}")
+            
+            # Créer une session DB seulement quand nécessaire
+            db = SessionLocal()
+            
+            try:
+                # Requête optimisée en une fois
+                user_info = db.query(User.role, User.notifications, User.username).filter(User.id == user_id).first()
+                if not user_info:
+                    logger.warning(f"❌ Utilisateur {user_id} non trouvé dans la base de données")
+                    await websocket.close(code=1008, reason="Utilisateur non trouvé")
+                    return
+                
+                role, notifications_enabled, username = user_info
+                
+                # Stocker la connexion avec les métadonnées
+                connections[user_id] = {
+                    'role': role,
+                    'ws': websocket,
+                    'notifications_enabled': notifications_enabled,
+                    'username': username
+                }
+                
+                # Confirmation au client
+                await websocket.send_json({
+                    "type": "connection_status",
+                    "status": "connected",
+                    "role": role,
+                    "notifications_enabled": notifications_enabled
+                })
+                
+                update_livreur_references()
+                
+                # Boucle principale - utiliser la DB seulement quand nécessaire
+                while True:
+                    message = await websocket.receive_json()
+                    
+                    if message.get("type") == "set_notification_preference":
+                        # Ouvrir une connexion DB seulement pour cette opération
+                        temp_db = SessionLocal()
+                        try:
+                            new_setting = message.get("enabled", True)
+                            user_obj = temp_db.query(User).filter(User.id == user_id).first()
+                            user_obj.notifications = new_setting
+                            temp_db.commit()
+                            
+                            # Mettre à jour le cache
+                            connections[user_id]['notifications_enabled'] = new_setting
+                            
+                            # Confirmer au client
+                            await websocket.send_json({
+                                "type": "notification_preference_updated",
+                                "enabled": new_setting
+                            })
+                        finally:
+                            temp_db.close()
+                    else:
+                        logger.info(f"Message de type non géré reçu: {message.get('type')}")
+            
+            finally:
+                db.close()
+        
         except ValueError as ve:
             logger.error(f"❌ Erreur d'authentification: {str(ve)}")
             # Ne pas accepter la connexion si le token est invalide
             await websocket.close(code=1008, reason=f"Authentification échouée: {str(ve)}")
             return
-        
-        # Seulement si l'authentification réussit, accepter la connexion
-        print('====================================4')
-        await websocket.accept()
-        
-        user_id = str(user["id"])
-        logger.info(f"✅ Token valide pour l'utilisateur: {user_id}")
-        print('====================================5')
-        
-        # Créer une session DB seulement quand nécessaire
-        db = SessionLocal()
-        
-        try:
-            # Requête optimisée en une fois
-            print('====================================6')
-            user_info = db.query(User.role, User.notifications, User.username).filter(User.id == user_id).first()
-            if not user_info:
-                logger.warning(f"❌ Utilisateur {user_id} non trouvé dans la base de données")
-                await websocket.close(code=1008, reason="Utilisateur non trouvé")
-                return
-            
-            print('====================================7')
-            role, notifications_enabled, username = user_info
-            
-            # Stocker la connexion avec les métadonnées
-            connections[user_id] = {
-                'role': role,
-                'ws': websocket,
-                'notifications_enabled': notifications_enabled,
-                'username': username
-            }
-            
-            # Confirmation au client
-            await websocket.send_json({
-                "type": "connection_status",
-                "status": "connected",
-                "role": role,
-                "notifications_enabled": notifications_enabled
-            })
-            print('====================================8')
-            
-            update_livreur_references()
-            
-            print('====================================9')
-            # Boucle principale - utiliser la DB seulement quand nécessaire
-            while True:
-                message = await websocket.receive_json()
-                
-                if message.get("type") == "set_notification_preference":
-                    # Ouvrir une connexion DB seulement pour cette opération
-                    temp_db = SessionLocal()
-                    try:
-                        new_setting = message.get("enabled", True)
-                        user_obj = temp_db.query(User).filter(User.id == user_id).first()
-                        user_obj.notifications = new_setting
-                        temp_db.commit()
-                        
-                        # Mettre à jour le cache
-                        connections[user_id]['notifications_enabled'] = new_setting
-                        
-                        # Confirmer au client
-                        await websocket.send_json({
-                            "type": "notification_preference_updated",
-                            "enabled": new_setting
-                        })
-                    finally:
-                        temp_db.close()
-                else:
-                    logger.info(f"Message de type non géré reçu: {message.get('type')}")
-        
-        finally:
-            db.close()
     
     except WebSocketDisconnect:
         logger.info(f"🔌 Déconnexion WebSocket ({user_id if 'user_id' in locals() else 'inconnu'})")

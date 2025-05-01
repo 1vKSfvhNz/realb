@@ -42,16 +42,17 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     except PyJWTError as e:
         raise ValueError(f"Invalid token: {str(e)}")
 
-# À mettre à jour dans utils/security.py
-
 def get_current_user_from_token(token: str) -> dict:
     try:
+        print("========================================")
         # Décodage du token avec vérification stricte
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        print("========================================2")
         
         # Extraction et vérification des claims
         email = payload.get("sub")
         user_id = payload.get("id")
+        print("========================================3")
         
         # Vérification plus stricte
         if not email:
@@ -59,12 +60,14 @@ def get_current_user_from_token(token: str) -> dict:
         if user_id is None:  # Permettre 0 comme ID valide
             raise ValueError("Token invalide - champ 'id' manquant")
             
+        print("========================================4")
         # Logger les informations de débogage
         expiry = payload.get("exp")
         now = datetime.now().timestamp()
         if expiry:
             remaining_time = expiry - now
             print(f"DEBUG - Token valide, expire dans {remaining_time:.2f} secondes")
+        print("========================================5")
         
         return {"email": email, "id": user_id}
         
