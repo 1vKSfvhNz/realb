@@ -35,7 +35,7 @@ class DeviceRegistration(BaseModel):
     platform: str
 
 # REST Routes with /api prefix
-@router.get("/notification_preference")
+@router.get("/api/notification_preference")
 async def get_notification_preference(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -52,7 +52,7 @@ async def get_notification_preference(
         logger.error(f"Error retrieving notification preference: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/notification_preference")
+@router.post("/api/notification_preference")
 async def update_notification_preference(
     preference: NotificationPreference,
     current_user: dict = Depends(get_current_user),
@@ -86,7 +86,7 @@ async def update_notification_preference(
 
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
-    token = websocket.query_params.get("token")
+    token = websocket.query_params.get("/apitoken")
     if not token:
         logger.warning("❌ Token manquant")
         await websocket.close(code=1008, reason="Token manquant")
@@ -144,11 +144,11 @@ async def websocket_notifications(websocket: WebSocket):
                 while True:
                     message = await websocket.receive_json()
                     
-                    if message.get("type") == "set_notification_preference":
+                    if message.get("/apitype") == "set_notification_preference":
                         # Ouvrir une connexion DB seulement pour cette opération
                         temp_db = SessionLocal()
                         try:
-                            new_setting = message.get("enabled", True)
+                            new_setting = message.get("/apienabled", True)
                             user_obj = temp_db.query(User).filter(User.id == user_id).first()
                             user_obj.notifications = new_setting
                             temp_db.commit()
@@ -190,7 +190,7 @@ async def websocket_notifications(websocket: WebSocket):
             update_livreur_references()
 
 # Route to register a device token
-@router.post("/register_device")
+@router.post("/api/register_device")
 async def register_device(
     device: DeviceRegistration,
     current_user: dict = Depends(get_current_user),
@@ -251,7 +251,7 @@ async def send_push_notification_if_needed(user_id: str, message: dict):
             user_id, 
             message["title"], 
             message["body"], 
-            data=message.get("data")
+            data=message.get("/apidata")
         )
 
 # Send FCM notification (Firebase Cloud Messaging) for Android
