@@ -10,7 +10,7 @@ from utils.security import get_current_user_from_token, get_current_user
 from config import get_error_key
 from pydantic import BaseModel
 from datetime import datetime
-from ..utils.connection_manager import connection_manager, start_cleanup_task
+from utils.connection_manager import connection_manager, start_cleanup_task
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
