@@ -339,7 +339,7 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
         query = query.filter(User.notifications == True)
         
         # Ne récupérer que les ID et non tous les objets
-        target_users = [(str(u.id), u.notifications) for u in query.all()]
+        target_users = [(str(u.id), u.notifications, u.username) for u in query.all()]
     finally:
         db.close()
     
@@ -347,14 +347,15 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
     disconnected = []
     logger.info(f"Sending notification to {len(target_users)} users")
     
-    print(connections)
-    for user_id, notifications_enabled in target_users:
+    print(target_users)
+    for user_id, notifications_enabled, username in target_users:
         if not notifications_enabled:
             continue
             
         info = connections.get(user_id)
         try:
             await info['ws'].send_json(message)
+            print('+++++++++++++++++++++++++++++++++++++++++++++++')
         except Exception as ws_error:
             logger.error(f"Error sending WebSocket notification: {str(ws_error)}")
             disconnected.append(user_id)
