@@ -81,3 +81,14 @@ class UserDevice(Base):
     
     # Relation avec l'utilisateur
     user = relationship("User", back_populates="devices")
+
+class UserConnection(Base):
+    __tablename__ = "user_connections"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, unique=True, index=True)
+    last_connected = Column(DateTime)
+    last_disconnected = Column(DateTime, nullable=True)
+    connection_data = Column(String)  # JSON serialized connection metadata
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
