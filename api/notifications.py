@@ -352,7 +352,9 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
         if not notifications_enabled:
             continue
             
+        print(connections)
         info = connections.get(user_id)
+        print(info)
         try:
             await info['ws'].send_json(message)
             print('+++++++++++++++++++++++++++++++++++++++++++++++')
