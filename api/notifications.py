@@ -93,7 +93,7 @@ async def websocket_notifications(websocket: WebSocket):
         return
     
     logger.info(f"🔄 Verifying token: {token[:10]}...")
-    user = get_current_user_from_token(token)
+    user = get_current_user(token=token)
     
     # Accept the connection BEFORE any database operations
     await websocket.accept()
