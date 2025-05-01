@@ -86,7 +86,7 @@ async def update_notification_preference(
 
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
-    token = websocket.query_params.get("/apitoken")
+    token = websocket.query_params.get("token")
     if not token:
         logger.warning("❌ Token manquant")
         await websocket.close(code=1008, reason="Token manquant")
