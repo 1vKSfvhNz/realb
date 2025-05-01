@@ -86,11 +86,13 @@ async def update_notification_preference(
 
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
+    print('====================================1')
     token = websocket.query_params.get("token")
     if not token:
         logger.warning("❌ Token manquant")
         await websocket.close(code=1008, reason="Token manquant")
         return
+    print('====================================2')
     
     logger.info(f"🔄 Vérification du token: {token[:10]}...")
     
@@ -99,6 +101,7 @@ async def websocket_notifications(websocket: WebSocket):
         user = None
         try:
             user = get_current_user_from_token(token=token)
+            print('====================================3')
         except ValueError as ve:
             logger.error(f"❌ Erreur d'authentification: {str(ve)}")
             # Ne pas accepter la connexion si le token est invalide
@@ -106,22 +109,26 @@ async def websocket_notifications(websocket: WebSocket):
             return
         
         # Seulement si l'authentification réussit, accepter la connexion
+        print('====================================4')
         await websocket.accept()
         
         user_id = str(user["id"])
         logger.info(f"✅ Token valide pour l'utilisateur: {user_id}")
+        print('====================================5')
         
         # Créer une session DB seulement quand nécessaire
         db = SessionLocal()
         
         try:
             # Requête optimisée en une fois
+            print('====================================6')
             user_info = db.query(User.role, User.notifications, User.username).filter(User.id == user_id).first()
             if not user_info:
                 logger.warning(f"❌ Utilisateur {user_id} non trouvé dans la base de données")
                 await websocket.close(code=1008, reason="Utilisateur non trouvé")
                 return
             
+            print('====================================7')
             role, notifications_enabled, username = user_info
             
             # Stocker la connexion avec les métadonnées
@@ -139,9 +146,11 @@ async def websocket_notifications(websocket: WebSocket):
                 "role": role,
                 "notifications_enabled": notifications_enabled
             })
+            print('====================================8')
             
             update_livreur_references()
             
+            print('====================================9')
             # Boucle principale - utiliser la DB seulement quand nécessaire
             while True:
                 message = await websocket.receive_json()

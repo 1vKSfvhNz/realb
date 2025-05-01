@@ -80,31 +80,6 @@ async def create_user(
         
         return {"message": "FIN"}
 
-# ✅ 
-# @router.post("/create_user")
-# async def create_user(
-#     user: UserCreate, 
-#     db: Session = Depends(get_db)
-# ):
-#     # Vérifier si l'utilisateur existe déjà
-#     existing_user = db.query(User).filter(or_(User.email == user.email, User.phone == user.phone)).first()
-#     if existing_user:
-#         raise HTTPException(status_code=400, detail=get_error_key("users", "create", "email_or_phone_exists"))
-#     db_user = User(email=user.email, username=user.username, password=user.password, phone=user.phone)
-#     db_user.save_user(db)
-
-#     try:
-#         await send_email_async(
-#             to_email=db_user.email,
-#             subject="Bienvenue sur notre plateforme",
-#             body_file="user_created.html",
-#             context={'username': db_user.username},
-#         )
-#     except Exception as e:
-#         logging.error(f"Erreur lors de l'envoi de l'email : {e}", exc_info=True)
-#     return {"message": "Compte créer"}
-
-
 # Route de connexion pour générer un token en utilisant la base de données
 @router.post("/login")
 async def login(

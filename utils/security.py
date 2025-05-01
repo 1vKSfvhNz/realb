@@ -47,12 +47,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
 def get_current_user_from_token(token: str) -> dict:
     try:
         # Décodage du token avec vérification stricte
-        payload = jwt.decode(
-            token, 
-            SECRET_KEY, 
-            algorithms=[ALGORITHM],
-            options={"verify_signature": True, "verify_exp": True}
-        )
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         
         # Extraction et vérification des claims
         email = payload.get("sub")
