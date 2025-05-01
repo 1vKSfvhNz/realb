@@ -343,21 +343,18 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
     disconnected = []
     logger.info(f"Sending notification to {len(target_users)} users")
     
+    print(connections)
     for user_id, notifications_enabled in target_users:
         if not notifications_enabled:
             continue
             
-        print(connections)
-        if user_id in user_ids:
-            info = connections.get(user_id)
-            print("dddddddddddddddddddddddddddddd", info)
-            try:
-                await info['ws'].send_json(message)
-            except Exception as ws_error:
-                logger.error(f"Error sending WebSocket notification: {str(ws_error)}")
-                disconnected.append(user_id)
-                await send_push_notification_if_needed(user_id, message)
-        else:
+        info = connections.get(user_id)
+        print("dddddddddddddddddddddddddddddd", info)
+        try:
+            await info['ws'].send_json(message)
+        except Exception as ws_error:
+            logger.error(f"Error sending WebSocket notification: {str(ws_error)}")
+            disconnected.append(user_id)
             await send_push_notification_if_needed(user_id, message)
             
     # Nettoyer les connexions déconnectées
