@@ -9,7 +9,6 @@ from config import get_error_key
 
 router = APIRouter()
 
-
 # Endpoint pour mettre à jour la position du livreur
 @router.post("/update_delivery_location")
 async def update_delivery_location(
@@ -19,7 +18,7 @@ async def update_delivery_location(
 ):
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
-        if user.role != 'Admin' and user.role != 'Deliverman':
+        if user.role.lower() != 'admin' and user.role.lower() != 'deliver':
             raise HTTPException(status_code=403, detail=get_error_key("users", "list", "no_permission"))
         
         # Vérifier si la commande existe
@@ -38,9 +37,7 @@ async def update_delivery_location(
             )
         
         # Créer ou mettre à jour l'entrée de position
-        courier_location = db.query(CourierLocation).filter(
-            CourierLocation.order_id == location.order_id
-        ).first()
+        courier_location = db.query(CourierLocation).filter(CourierLocation.order_id == location.order_id).first()
         
         if courier_location:
             # Mettre à jour la position existante
