@@ -404,7 +404,6 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
     """Notify users via WebSocket or push notification fallback"""
     # First, get target user IDs from database if filtering by roles
     target_user_ids = []
-    print("liste: ", delivery_results)
     if roles:
         db = SessionLocal()
         try:
@@ -433,7 +432,8 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
         message=message,
         user_ids=target_user_ids if target_user_ids else None
     )
-    
+    print("liste: ", delivery_results)
+
     # For users who didn't receive the WebSocket message, send push notification
     for user_id, delivered in delivery_results.items():
         if not delivered:
