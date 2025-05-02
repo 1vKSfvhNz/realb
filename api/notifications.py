@@ -185,6 +185,7 @@ async def websocket_notifications(websocket: WebSocket):
                 db.close()
         
         except ValueError as ve:
+            print('5555555555555555555555555555555555555555555555555')
             logger.error(f"❌ Authentication error: {str(ve)}")
             # Don't accept the connection if token is invalid
             await websocket.close(code=1008, reason=f"Authentication failed: {str(ve)}")
