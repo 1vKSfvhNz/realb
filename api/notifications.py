@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 FIREBASE_SERVER_KEY = getenv("FIREBASE_SERVER_KEY")
-APNS_BUNDLE_ID = getenv("APNS_BUNDLE_ID", "hggh")
+APNS_BUNDLE_ID = getenv("APNS_BUNDLE_ID")
 
 # Router for our endpoints
 router = APIRouter()
