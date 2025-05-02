@@ -110,7 +110,7 @@ async def websocket_notifications(websocket: WebSocket):
                 return
                 
             user_id = str(user["id"])
-            logger.info(f"✅ Token valide pour l'utilisateur: {user["email"]}")
+            logger.info(f"✅ Token valide pour l'utilisateur: {user['email']}")
             
             # Create a DB session only when needed
             db = SessionLocal()
@@ -184,7 +184,6 @@ async def websocket_notifications(websocket: WebSocket):
                 db.close()
         
         except ValueError as ve:
-            print('5555555555555555555555555555555555555555555555555 ')
             logger.error(f"❌ Authentication error: {str(ve)}")
             # Don't accept the connection if token is invalid
             await websocket.close(code=1008, reason=f"Authentication failed: {str(ve)}")
