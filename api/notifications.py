@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from models import User, UserDevice, get_db, SessionLocal
 from typing import List
@@ -412,8 +413,8 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
             
             # Apply role filter
             if roles:
-                query = query.filter(User.role.in_([r.title() for r in roles]))
-                
+                query = query.filter(func.lower(User.role).in_([r.lower() for r in roles]))                
+
             # Convert to list of string IDs
             target_user_ids = [str(u.id) for u in query.all()]
         finally:
