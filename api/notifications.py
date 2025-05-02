@@ -103,7 +103,6 @@ async def websocket_notifications(websocket: WebSocket):
     try:
         # Verify token before accepting connection
         try:
-            print(token)
             user = get_current_user_from_token(token=token)
             if not user:
                 logger.error("❌ Utilisateur non trouvé après vérification du token")
@@ -111,7 +110,7 @@ async def websocket_notifications(websocket: WebSocket):
                 return
                 
             user_id = str(user["id"])
-            logger.info(f"✅ Token valide pour l'utilisateur: {user_id}")
+            logger.info(f"✅ Token valide pour l'utilisateur: {user["email"]}")
             
             # Create a DB session only when needed
             db = SessionLocal()
@@ -185,7 +184,7 @@ async def websocket_notifications(websocket: WebSocket):
                 db.close()
         
         except ValueError as ve:
-            print('5555555555555555555555555555555555555555555555555')
+            print('5555555555555555555555555555555555555555555555555 ')
             logger.error(f"❌ Authentication error: {str(ve)}")
             # Don't accept the connection if token is invalid
             await websocket.close(code=1008, reason=f"Authentication failed: {str(ve)}")
@@ -406,7 +405,7 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
     """Notify users via WebSocket or push notification fallback"""
     # First, get target user IDs from database if filtering by roles
     target_user_ids = []
-    
+    print("liste: ", delivery_results)
     if roles:
         db = SessionLocal()
         try:
