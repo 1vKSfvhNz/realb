@@ -56,14 +56,7 @@ def get_current_user_from_token(token: str) -> dict:
             raise ValueError("Token invalide - champ 'sub' (email) manquant")
         if user_id is None:  # Permettre 0 comme ID valide
             raise ValueError("Token invalide - champ 'id' manquant")
-            
-        # Logger les informations de débogage
-        expiry = payload.get("exp")
-        now = datetime.now().timestamp()
-        if expiry:
-            remaining_time = expiry - now
-            print(f"DEBUG - Token valide, expire dans {remaining_time:.2f} secondes")
-        
+                    
         return {"email": email, "id": user_id}
         
     except ExpiredSignatureError:

@@ -104,6 +104,7 @@ async def websocket_notifications(websocket: WebSocket, background_tasks: Backgr
         # Verify token before accepting connection
         try:
             user = get_current_user_from_token(token=token)
+            print('--------------------------------------------------')
             if not user:
                 logger.error("❌ Utilisateur non trouvé après vérification du token")
                 await websocket.close(code=1008, reason="Utilisateur non trouvé")
