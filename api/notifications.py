@@ -91,7 +91,7 @@ async def update_notification_preference(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.websocket("/ws/notifications")
-async def websocket_notifications(websocket: WebSocket, background_tasks: BackgroundTasks):
+async def websocket_notifications(websocket: WebSocket):
     token = websocket.query_params.get("token")
     if not token:
         logger.warning("❌ Token manquant")
