@@ -11,13 +11,21 @@ from config import get_error_key
 from pydantic import BaseModel
 from datetime import datetime
 from utils.connection_manager import connection_manager, start_cleanup_task
+from aioapns import APNs, NotificationRequest, PushType
+from aioapns.exceptions import ConnectionError
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 FIREBASE_SERVER_KEY = getenv("FIREBASE_SERVER_KEY")
-APNS_BUNDLE_ID = getenv("APNS_BUNDLE_ID")
+# Configuration APNS
+APNS_BUNDLE_ID = getenv("APNS_BUNDLE_ID")  # Remplacez par votre bundle ID
+APNS_KEY_PATH = "/path/to/your/apns_key.p8"  # Chemin vers votre clé p8
+APNS_KEY_ID = getenv("APNS_KEY_ID")  # Votre Key ID fourni par Apple
+APNS_TEAM_ID = getenv("APNS_TEAM_ID")  # Votre Team ID Apple Developer
+USE_SANDBOX = False  # True pour environnement de développement, False pour production
 
 # Router for our endpoints
 router = APIRouter()
@@ -311,42 +319,86 @@ async def send_fcm_notification(token: str, title: str, body: str, data: dict = 
         except Exception as e:
             logger.error(f"Error sending FCM: {e}")
 
-# Send APNS notification for iOS
-async def send_apns_notification(token: str, title: str, body: str, data: dict = None):
+async def initialize_apns_client():
+    """Initialise et retourne un client APNS."""
     try:
-        # Implementation for Apple Push Notification Service
-        # This is a simplified version - in production you'd use aioapns or a similar library
-        headers = {
-            "apns-push-type": "alert",
-            "apns-topic": APNS_BUNDLE_ID,
-            "apns-priority": "10",
-            "apns-expiration": "0"
-        }
-        
+        client = APNs(
+            key_path=APNS_KEY_PATH,
+            key_id=APNS_KEY_ID,
+            team_id=APNS_TEAM_ID,
+            bundle_id=APNS_BUNDLE_ID,
+            use_sandbox=USE_SANDBOX
+        )
+        return client
+    except Exception as e:
+        logger.error(f"Erreur lors de l'initialisation du client APNS: {e}")
+        raise
+
+async def send_apns_notification(token: str, title: str, body: str, data: dict = None):
+    """
+    Envoie une notification push iOS via Apple Push Notification Service (APNS).
+    
+    Args:
+        token (str): Le token de l'appareil destinataire
+        title (str): Le titre de la notification
+        body (str): Le corps de la notification
+        data (dict, optional): Données personnalisées à inclure dans la notification
+    
+    Returns:
+        bool: True si la notification a été envoyée avec succès, False sinon
+    """
+    try:
+        # Création du payload de base
         payload = {
             "aps": {
                 "alert": {
                     "title": title,
                     "body": body
                 },
-                "sound": "default"
+                "sound": "default",
+                "badge": 1
             }
         }
         
+        # Ajout des données personnalisées au payload
         if data:
-            # Add custom data to payload
             for key, value in data.items():
-                if key != "aps":  # Don't override the aps dictionary
+                if key != "aps":  # Ne pas écraser le dictionnaire aps
                     payload[key] = value
         
-        # This is a placeholder - you would use proper APNS authentication
-        logger.info(f"Would send APNS to: {token}")
-        logger.info(f"APNS payload: {json.dumps(payload)}")
+        # Logging pour debug
+        logger.info(f"Envoi APNS à: {token}")
+        logger.info(f"Payload APNS: {json.dumps(payload)}")
         
-        # In production, implement actual APNS sending here
+        # Initialisation du client APNS
+        apns_client = await initialize_apns_client()
         
+        # Création de la requête de notification
+        notification = NotificationRequest(
+            device_token=token,
+            message=payload,
+            push_type=PushType.ALERT
+        )
+        
+        # Envoi de la notification
+        response = await apns_client.send_notification(notification)
+        
+        # Vérification de la réponse
+        if hasattr(response, 'is_successful') and response.is_successful:
+            logger.info(f"Notification APNS envoyée avec succès à {token}")
+            return True
+        else:
+            logger.error(f"Échec de l'envoi APNS: {response.description}")
+            return False
+            
+    except ConnectionError as e:
+        # Erreurs spécifiques à APNS
+        logger.error(f"Erreur APNS lors de l'envoi à {token}: {e}")
+        return False
     except Exception as e:
-        logger.error(f"Error sending APNS: {e}")
+        # Autres erreurs
+        logger.error(f"Erreur lors de l'envoi de la notification APNS: {e}")
+        return False
 
 async def notify_users(message: dict, roles: List[str] = None, user_ids: List[str] = None, exclude_ids: List[str] = None):
     """Notify users via WebSocket or push notification fallback"""
