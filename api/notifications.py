@@ -103,6 +103,7 @@ async def websocket_notifications(websocket: WebSocket):
     try:
         # Verify token before accepting connection
         try:
+            print(token)
             user = get_current_user_from_token(token=token)
             if not user:
                 logger.error("❌ Utilisateur non trouvé après vérification du token")
