@@ -117,8 +117,10 @@ async def update_notification_preference(
         logger.error(f"Error updating notification preference: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# WebSocket error
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
+    
     token = websocket.query_params.get("token")
     if not token:
         logger.warning("❌ Token manquant")
@@ -136,7 +138,7 @@ async def websocket_notifications(websocket: WebSocket):
                 await websocket.close(code=1008, reason="Utilisateur non trouvé")
                 return
                 
-            user_id = str(user["id"])
+            user_id = user["id"]
             logger.info(f"✅ Token valide pour l'utilisateur: {user['email']}")
             
             # Create a DB session only when needed

@@ -49,12 +49,12 @@ class ConnectionManager:
                 # Mark as initialized to prevent repeated attempts
                 self._redis_initialized = True
 
-    async def connect(self, websocket: WebSocket, user_id: str, user_data: dict) -> bool:
+    async def connect(self, websocket: WebSocket, user_id: int, user_data: dict) -> bool:
         """
         Register new connection with the manager.
         Returns True if connection successful, False otherwise.
         """
-        try:
+        try:            
             # Check if user is already connected
             if user_id in self.active_connections:
                 old_conn = self.active_connections[user_id]
@@ -91,7 +91,7 @@ class ConnectionManager:
             logger.error(f"❌ Connection error for user {user_id}: {e}")
             return False
     
-    def disconnect(self, user_id: str):
+    def disconnect(self, user_id: int):
         """
         Disconnect and remove user connection but keep metadata for reconnection
         """
@@ -109,13 +109,13 @@ class ConnectionManager:
             return conn
         return None
     
-    def is_connected(self, user_id: str) -> bool:
+    def is_connected(self, user_id: int) -> bool:
         """Check if a user is currently connected"""
         return user_id in self.active_connections
         
-    def get_connection(self, user_id: str) -> Optional[Dict[str, Any]]:
+    def get_connection(self, user_id: int) -> Optional[Dict[str, Any]]:
         """Get connection data for a user if connected"""
-        return self.active_connections.get(user_id)
+        return self.active_connections.get(str(user_id))
     
     def get_all_connections(self) -> Dict[str, Dict[str, Any]]:
         """Get all active connections"""
@@ -130,7 +130,7 @@ class ConnectionManager:
             if conn["metadata"].get("role", "").lower() == role.lower()
         ]
     
-    def start_heartbeat(self, user_id: str):
+    def start_heartbeat(self, user_id: int):
         """Start a heartbeat task for this connection"""
         # Cancel any existing task first
         self.stop_heartbeat(user_id)
@@ -140,14 +140,14 @@ class ConnectionManager:
             self._heartbeat_worker(user_id)
         )
         
-    def stop_heartbeat(self, user_id: str):
+    def stop_heartbeat(self, user_id: int):
         """Stop the heartbeat task for this connection"""
         if user_id in self.heartbeat_tasks:
             task = self.heartbeat_tasks.pop(user_id)
             if not task.done():
                 task.cancel()
     
-    async def _heartbeat_worker(self, user_id: str):
+    async def _heartbeat_worker(self, user_id: int):
         """Background task to send periodic heartbeats"""
         try:
             while user_id in self.active_connections:
@@ -167,7 +167,7 @@ class ConnectionManager:
             logger.error(f"❌ Error in heartbeat task for user {user_id}: {e}")
             # Don't remove connection here, let the failed heartbeat do it
     
-    async def send_heartbeat(self, user_id: str) -> bool:
+    async def send_heartbeat(self, user_id: int) -> bool:
         """
         Send a heartbeat to check if the connection is still alive
         Returns True if heartbeat successful, False otherwise
@@ -191,7 +191,7 @@ class ConnectionManager:
             self.disconnect(user_id)
             return False
     
-    async def send_message(self, user_id: str, message: dict) -> bool:
+    async def send_message(self, user_id: int, message: dict) -> bool:
         """
         Send a message to a specific user
         Returns True if sent successfully, False otherwise
@@ -244,7 +244,7 @@ class ConnectionManager:
             
         return results
     
-    def save_connection_metadata(self, user_id: str, metadata: dict):
+    def save_connection_metadata(self, user_id: int, metadata: dict):
         """Save connection metadata to persistent storage"""
         try:
             self.init_redis()
@@ -270,7 +270,7 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"❌ Failed to save connection metadata: {e}")
     
-    def update_disconnection_time(self, user_id: str):
+    def update_disconnection_time(self, user_id: int):
         """Update the disconnection time in persistent storage"""
         try:
             self.init_redis()
@@ -297,7 +297,7 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"❌ Failed to update disconnection time: {e}")
     
-    def save_to_database(self, user_id: str, metadata: dict):
+    def save_to_database(self, user_id: int, metadata: dict):
         """Save connection info to database for long-term persistence"""
         try:
             db = SessionLocal()
@@ -336,7 +336,7 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"❌ Failed to save connection to database: {e}")
     
-    def update_disconnection_in_db(self, user_id: str):
+    def update_disconnection_in_db(self, user_id: int):
         """Update disconnection time in database"""
         try:
             db = SessionLocal()

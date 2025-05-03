@@ -48,8 +48,8 @@ def get_current_user_from_token(token: str) -> dict:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         
         # Extraction et vérification des claims
-        email = payload.get("sub")
-        user_id = payload.get("id")
+        email: str = payload.get("sub")
+        user_id: int = payload.get("id")
         
         # Vérification plus stricte
         if not email:
