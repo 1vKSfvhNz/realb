@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from models import User, UserDevice, get_db, SessionLocal
-from typing import List
+from typing import List, Optional
 import httpx
 import json
 import logging
@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 
 FIREBASE_SERVER_KEY = getenv("FIREBASE_SERVER_KEY")
 # Configuration APNS
-APNS_BUNDLE_ID = getenv("APNS_BUNDLE_ID")  # Remplacez par votre bundle ID
-APNS_KEY_PATH = "/path/to/your/apns_key.p8"  # Chemin vers votre clé p8
-APNS_KEY_ID = getenv("APNS_KEY_ID")  # Votre Key ID fourni par Apple
-APNS_TEAM_ID = getenv("APNS_TEAM_ID")  # Votre Team ID Apple Developer
-USE_SANDBOX = False  # True pour environnement de développement, False pour production
+APNS_BUNDLE_ID = getenv("APNS_BUNDLE_ID")
+APNS_KEY_PATH = getenv("APNS_KEY_PATH", "/path/to/your/apns_key.p8")
+APNS_KEY_ID = getenv("APNS_KEY_ID")
+APNS_TEAM_ID = getenv("APNS_TEAM_ID")
+USE_SANDBOX = getenv("APNS_SANDBOX", "False").lower() == "true"
 
 # Router for our endpoints
 router = APIRouter()
@@ -38,24 +38,38 @@ start_cleanup_task()
 class NotificationPreference(BaseModel):
     enabled: bool
     preference_type: str = "push"
+    conversation_id: Optional[str] = None  # Pour notifications par conversation
 
 # Pydantic model for device registration
 class DeviceRegistration(BaseModel):
     device_token: str
     platform: str
 
+# Pydantic model for read receipts
+class ReadReceipt(BaseModel):
+    message_ids: List[str]
+    conversation_id: str
+
 # REST Routes with /api prefix
 @router.get("/api/notification_preference")
 async def get_notification_preference(
+    conversation_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """Get notification preferences, globally or for a specific conversation"""
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
         if not user:
             raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
         
-        # Return current preference (true by default)
+        if conversation_id:
+            # Get conversation-specific preference
+            # TODO: Implement conversation preferences in your data model
+            # For now, return global preference
+            return {"enabled": user.notifications, "conversation_id": conversation_id}
+        
+        # Return global preference
         return {"enabled": user.notifications}
     except Exception as e:
         db.rollback()
@@ -68,27 +82,85 @@ async def update_notification_preference(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """Update notification preferences, globally or for a specific conversation"""
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
         if not user:
             raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
         
-        # Update with the provided setting instead of toggling
-        user.notifications = preference.enabled
-        db.commit()
+        if preference.conversation_id:
+            # Set conversation-specific preference
+            # TODO: Implement conversation preferences in your data model
+            # Store the preference for the specific conversation
+            pass
+        else:
+            # Update global preference
+            user.notifications = preference.enabled
+            db.commit()
         
         # If user is connected via WebSocket, sync the preference
         user_id = str(user.id)
         if connection_manager.is_connected(user_id):
             await connection_manager.send_message(user_id, {
                 "type": preference.preference_type,
-                "enabled": preference.enabled
+                "enabled": preference.enabled,
+                "conversation_id": preference.conversation_id
             })
         
-        return {"message": "Notification preference updated", "enabled": user.notifications}
+        return {
+            "message": "Notification preference updated", 
+            "enabled": preference.enabled,
+            "conversation_id": preference.conversation_id
+        }
     except Exception as e:
         db.rollback()
         logger.error(f"Error updating notification preference: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/mark_as_read")
+async def mark_messages_as_read(
+    receipt: ReadReceipt,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Mark messages as read and notify other users"""
+    try:
+        user_id = str(current_user['id'])
+        user = db.query(User).filter(User.id == user_id).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
+        
+        # Mark messages as read in database
+        # TODO: Implement this in your data model
+        
+        # Send read receipt to all users in the conversation
+        # Get all participants in the conversation
+        # This is a simplified example - you'd need to get real participants
+        participants = ["participant_id_1", "participant_id_2"]  # Replace with actual logic
+        
+        # Remove current user from recipients
+        recipients = [p for p in participants if p != user_id]
+        
+        # Send read receipts to all participants
+        if recipients:
+            read_receipt_message = {
+                "type": "read_receipt",
+                "conversation_id": receipt.conversation_id,
+                "message_ids": receipt.message_ids,
+                "read_by": user_id,
+                "read_at": datetime.now().isoformat()
+            }
+            
+            await connection_manager.broadcast(
+                message=read_receipt_message,
+                user_ids=recipients
+            )
+        
+        return {"status": "success", "marked_messages": len(receipt.message_ids)}
+    
+    except Exception as e:
+        logger.error(f"Error marking messages as read: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.websocket("/ws/notifications")
@@ -131,8 +203,13 @@ async def websocket_notifications(websocket: WebSocket):
                     "role": role,
                     "notifications_enabled": notifications_enabled,
                     "username": username,
-                    "user_id": user_id
+                    "user_id": user_id,
+                    "status": "online"  # Add user status
                 }
+                
+                # Get user conversations for muted conversations tracking
+                # TODO: Implement this with your data model
+                # user_data["muted_conversations"] = get_user_muted_conversations(user_id, db)
                 
                 # Connect using the connection manager
                 success = await connection_manager.connect(websocket, user_id, user_data)
@@ -148,6 +225,23 @@ async def websocket_notifications(websocket: WebSocket):
                     "notifications_enabled": notifications_enabled
                 })
                 
+                # Broadcast user's online status to relevant users (contacts/friends)
+                # TODO: Get user's contacts list
+                # contacts = get_user_contacts(user_id, db)
+                contacts = []  # Replace with actual contacts retrieval
+                
+                if contacts:
+                    await connection_manager.broadcast(
+                        message={
+                            "type": "user_status_change",
+                            "user_id": user_id,
+                            "username": username,
+                            "status": "online",
+                            "last_seen": datetime.now().isoformat()
+                        },
+                        user_ids=contacts
+                    )
+                
                 # Main message loop
                 while True:
                     message = await websocket.receive_json()
@@ -157,27 +251,129 @@ async def websocket_notifications(websocket: WebSocket):
                         temp_db = SessionLocal()
                         try:
                             new_setting = message.get("enabled", True)
-                            user_obj = temp_db.query(User).filter(User.id == user_id).first()
-                            user_obj.notifications = new_setting
-                            temp_db.commit()
+                            conversation_id = message.get("conversation_id")
                             
-                            # Update the connection metadata
-                            conn = connection_manager.get_connection(user_id)
-                            if conn:
-                                conn["metadata"]["notifications_enabled"] = new_setting
+                            if conversation_id:
+                                # Set conversation-specific preference
+                                # TODO: Implement with your data model
+                                # update_conversation_preference(user_id, conversation_id, new_setting, temp_db)
+                                
+                                # Update connection metadata
+                                conn = connection_manager.get_connection(user_id)
+                                if conn and "muted_conversations" in conn["metadata"]:
+                                    if new_setting == False:  # Muting
+                                        if conversation_id not in conn["metadata"]["muted_conversations"]:
+                                            conn["metadata"]["muted_conversations"].append(conversation_id)
+                                    else:  # Unmuting
+                                        if conversation_id in conn["metadata"]["muted_conversations"]:
+                                            conn["metadata"]["muted_conversations"].remove(conversation_id)
+                            else:
+                                # Global preference
+                                user_obj = temp_db.query(User).filter(User.id == user_id).first()
+                                user_obj.notifications = new_setting
+                                temp_db.commit()
+                                
+                                # Update the connection metadata
+                                conn = connection_manager.get_connection(user_id)
+                                if conn:
+                                    conn["metadata"]["notifications_enabled"] = new_setting
                             
                             # Confirm to the client
                             await connection_manager.send_message(user_id, {
                                 "type": "notification_preference_updated",
-                                "enabled": new_setting
+                                "enabled": new_setting,
+                                "conversation_id": conversation_id
                             })
                         finally:
                             temp_db.close()
+                    
+                    elif message.get("type") == "set_status":
+                        # Update user status (away, busy, etc.)
+                        new_status = message.get("status", "online")
+                        
+                        # Update connection metadata
+                        conn = connection_manager.get_connection(user_id)
+                        if conn:
+                            conn["metadata"]["status"] = new_status
+                            
+                            # Get user's contacts
+                            # contacts = get_user_contacts(user_id)
+                            contacts = []  # Replace with actual contacts retrieval
+                            
+                            # Broadcast status change
+                            if contacts:
+                                await connection_manager.broadcast(
+                                    message={
+                                        "type": "user_status_change",
+                                        "user_id": user_id,
+                                        "username": username,
+                                        "status": new_status,
+                                        "last_seen": datetime.now().isoformat()
+                                    },
+                                    user_ids=contacts
+                                )
+                    
+                    elif message.get("type") == "typing_indicator":
+                        # Handle typing indicators
+                        conversation_id = message.get("conversation_id")
+                        is_typing = message.get("is_typing", False)
+                        
+                        if conversation_id:
+                            # Get conversation participants
+                            # participants = get_conversation_participants(conversation_id)
+                            participants = []  # Replace with actual participants retrieval
+                            
+                            # Remove current user
+                            recipients = [p for p in participants if p != user_id]
+                            
+                            # Broadcast typing status
+                            if recipients:
+                                await connection_manager.broadcast(
+                                    message={
+                                        "type": "typing_indicator",
+                                        "conversation_id": conversation_id,
+                                        "user_id": user_id,
+                                        "username": username,
+                                        "is_typing": is_typing
+                                    },
+                                    user_ids=recipients
+                                )
+                    
+                    elif message.get("type") == "mark_as_read":
+                        # Handle read receipts through WebSocket
+                        conversation_id = message.get("conversation_id")
+                        message_ids = message.get("message_ids", [])
+                        
+                        if conversation_id and message_ids:
+                            # Mark as read in database
+                            # TODO: Implement with your data model
+                            
+                            # Get conversation participants
+                            # participants = get_conversation_participants(conversation_id)
+                            participants = []  # Replace with actual participants retrieval
+                            
+                            # Remove current user
+                            recipients = [p for p in participants if p != user_id]
+                            
+                            # Send read receipts
+                            if recipients:
+                                await connection_manager.broadcast(
+                                    message={
+                                        "type": "read_receipt",
+                                        "conversation_id": conversation_id,
+                                        "message_ids": message_ids,
+                                        "read_by": user_id,
+                                        "read_at": datetime.now().isoformat()
+                                    },
+                                    user_ids=recipients
+                                )
+                    
                     elif message.get("type") == "pong":
                         # Update last seen timestamp for heartbeat
                         conn = connection_manager.get_connection(user_id)
                         if conn:
                             conn["last_seen"] = datetime.now()
+                    
                     else:
                         logger.info(f"Unhandled message type received: {message.get('type')}")
             
@@ -193,7 +389,32 @@ async def websocket_notifications(websocket: WebSocket):
     except WebSocketDisconnect:
         logger.info(f"🔌 WebSocket disconnect ({user_id if 'user_id' in locals() else 'unknown'})")
         if 'user_id' in locals():
+            # Get user data before disconnecting
+            conn = connection_manager.get_connection(user_id)
+            username = conn["metadata"].get("username") if conn else None
+            
+            # Disconnect user
             connection_manager.disconnect(user_id)
+            
+            # Update user's last seen timestamp in database
+            update_user_last_seen(user_id)
+            
+            # Broadcast offline status to contacts
+            if username:
+                # contacts = get_user_contacts(user_id)
+                contacts = []  # Replace with actual contacts retrieval
+                
+                if contacts:
+                    await connection_manager.broadcast(
+                        message={
+                            "type": "user_status_change",
+                            "user_id": user_id,
+                            "username": username,
+                            "status": "offline",
+                            "last_seen": datetime.now().isoformat()
+                        },
+                        user_ids=contacts
+                    )
     except Exception as e:
         logger.error(f"❌ WebSocket error: {str(e)}")
         try:
@@ -202,6 +423,20 @@ async def websocket_notifications(websocket: WebSocket):
                 connection_manager.disconnect(user_id)
         except:
             pass
+
+def update_user_last_seen(user_id: str):
+    """Update user's last seen timestamp in database"""
+    try:
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                user.last_seen = datetime.now()
+                db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error updating user's last seen: {str(e)}")
 
 # Route to register a device token
 @router.post("/api/register_device")
@@ -272,6 +507,22 @@ async def send_push_notification(user_id: str, title: str, body: str, data: dict
             logger.info(f"No registered devices for user {user_id}")
             return
 
+        # Check if user has notifications enabled
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user or not user.notifications:
+            logger.info(f"User {user_id} has disabled notifications")
+            return
+        
+        # Check if this conversation is muted (if applicable)
+        conversation_id = data.get("conversation_id") if data else None
+        if conversation_id:
+            # TODO: Check if conversation is muted
+            # is_muted = check_if_conversation_muted(user_id, conversation_id)
+            # if is_muted:
+            #     logger.info(f"Conversation {conversation_id} is muted for user {user_id}")
+            #     return
+            pass
+
         for device in devices:
             if device.platform.lower() == 'android':
                 await send_fcm_notification(device.device_token, title, body, data)
@@ -284,13 +535,24 @@ async def send_push_notification(user_id: str, title: str, body: str, data: dict
         db.close()
 
 async def send_push_notification_if_needed(user_id: str, message: dict):
+    """Send push notifications only if necessary"""
+    # First check if the user is connected - if connected, don't send push
+    if connection_manager.is_connected(user_id):
+        logger.info(f"User {user_id} is connected, skipping push notification")
+        return False
+    
+    # Check if required fields are present
     if "title" in message and "body" in message:
+        # Send the notification
         await send_push_notification(
             user_id, 
             message["title"], 
             message["body"], 
-            data=message.get("data")
+            data=message.get("data", {})
         )
+        return True
+    
+    return False
 
 # Send FCM notification (Firebase Cloud Messaging) for Android
 async def send_fcm_notification(token: str, title: str, body: str, data: dict = None):
@@ -300,16 +562,31 @@ async def send_fcm_notification(token: str, title: str, body: str, data: dict = 
         "Content-Type": "application/json"
     }
     
+    # Prepare basic payload
     payload = {
         "to": token,
         "notification": {
             "title": title,
             "body": body,
-            "sound": "default"
-        }
+            "sound": "default",
+            "badge": 1,  # Increment badge count
+            "channelId": "default"  # Or use specific channel for different notification types
+        },
+        "priority": "high"  # Ensure timely delivery (like WhatsApp)
     }
     
+    # Add data payload for the app to process
     if data:
+        # Add conversation ID for grouping
+        if "conversation_id" in data:
+            payload["android"] = {
+                "notification": {
+                    "tag": data["conversation_id"],  # Group by conversation
+                    "color": "#25D366"  # WhatsApp-like color
+                }
+            }
+        
+        # Add data for app processing
         payload["data"] = data
         
     async with httpx.AsyncClient() as client:
@@ -317,11 +594,13 @@ async def send_fcm_notification(token: str, title: str, body: str, data: dict = 
             response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             logger.info(f"FCM notification sent: {response.text}")
+            return True
         except Exception as e:
             logger.error(f"Error sending FCM: {e}")
+            return False
 
 async def initialize_apns_client():
-    """Initialise et retourne un client APNS."""
+    """Initialize and return an APNS client."""
     try:
         client = APNs(
             key_path=APNS_KEY_PATH,
@@ -332,24 +611,15 @@ async def initialize_apns_client():
         )
         return client
     except Exception as e:
-        logger.error(f"Erreur lors de l'initialisation du client APNS: {e}")
+        logger.error(f"Error initializing APNS client: {e}")
         raise
 
 async def send_apns_notification(token: str, title: str, body: str, data: dict = None):
     """
-    Envoie une notification push iOS via Apple Push Notification Service (APNS).
-    
-    Args:
-        token (str): Le token de l'appareil destinataire
-        title (str): Le titre de la notification
-        body (str): Le corps de la notification
-        data (dict, optional): Données personnalisées à inclure dans la notification
-    
-    Returns:
-        bool: True si la notification a été envoyée avec succès, False sinon
+    Send an iOS push notification via APNS with WhatsApp-like features
     """
     try:
-        # Création du payload de base
+        # Create base payload with basic alert
         payload = {
             "aps": {
                 "alert": {
@@ -357,54 +627,60 @@ async def send_apns_notification(token: str, title: str, body: str, data: dict =
                     "body": body
                 },
                 "sound": "default",
-                "badge": 1
+                "badge": 1,
+                "mutable-content": 1  # Allow app to modify notification content
             }
         }
         
-        # Ajout des données personnalisées au payload
+        # Configure WhatsApp-like notification grouping
+        if data and "conversation_id" in data:
+            payload["aps"]["thread-id"] = data["conversation_id"]  # Group by conversation
+        
+        # Add app-specific data
         if data:
             for key, value in data.items():
-                if key != "aps":  # Ne pas écraser le dictionnaire aps
+                if key != "aps":  # Don't overwrite the aps dictionary
                     payload[key] = value
         
-        # Logging pour debug
-        logger.info(f"Envoi APNS à: {token}")
-        logger.info(f"Payload APNS: {json.dumps(payload)}")
+        # Log for debugging
+        logger.info(f"Sending APNS to: {token}")
+        logger.info(f"APNS payload: {json.dumps(payload)}")
         
-        # Initialisation du client APNS
+        # Initialize APNS client
         apns_client = await initialize_apns_client()
         
-        # Création de la requête de notification
+        # Create notification request
         notification = NotificationRequest(
             device_token=token,
             message=payload,
             push_type=PushType.ALERT
         )
         
-        # Envoi de la notification
+        # Send notification
         response = await apns_client.send_notification(notification)
         
-        # Vérification de la réponse
+        # Check response
         if hasattr(response, 'is_successful') and response.is_successful:
-            logger.info(f"Notification APNS envoyée avec succès à {token}")
+            logger.info(f"APNS notification sent successfully to {token}")
             return True
         else:
-            logger.error(f"Échec de l'envoi APNS: {response.description}")
+            logger.error(f"APNS send failed: {response.description}")
             return False
             
     except ConnectionError as e:
-        # Erreurs spécifiques à APNS
-        logger.error(f"Erreur APNS lors de l'envoi à {token}: {e}")
+        logger.error(f"APNS connection error for {token}: {e}")
         return False
     except Exception as e:
-        # Autres erreurs
-        logger.error(f"Erreur lors de l'envoi de la notification APNS: {e}")
+        logger.error(f"Error sending APNS notification: {e}")
         return False
 
 async def notify_users(message: dict, roles: List[str] = None, user_ids: List[str] = None, exclude_ids: List[str] = None):
-    """Notify users via WebSocket or push notification fallback"""
-    # First, get target user IDs from database if filtering by roles
+    """
+    Notify users with smart delivery - WebSocket for online users, push for offline users
+    """
+    # First, get target user IDs
     target_user_ids = []
+    
     if roles:
         db = SessionLocal()
         try:
@@ -428,30 +704,46 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
     if exclude_ids:
         target_user_ids = [uid for uid in target_user_ids if uid not in exclude_ids]
     
-    # Send to all connected users first
+    # Check for conversation muting
+    conversation_id = message.get("data", {}).get("conversation_id", None)
+    if conversation_id:
+        # Filter users who have muted this conversation
+        # target_user_ids = filter_unmuted_users(target_user_ids, conversation_id)
+        pass
+    
+    # First try WebSocket delivery for connected users
     delivery_results = await connection_manager.broadcast(
         message=message,
         user_ids=target_user_ids if target_user_ids else None
     )
-    print("liste: ", delivery_results)
-
-    # For users who didn't receive the WebSocket message, send push notification
-    for user_id, delivered in delivery_results.items():
-        if not delivered:
-            await send_push_notification_if_needed(user_id, message)
     
-    # For users not in the active connections but in target_user_ids, send push notifications
+    # Track notification results
+    results = {
+        "websocket_sent": 0,
+        "push_sent": 0,
+        "total_users": len(target_user_ids)
+    }
+    
+    # For users who didn't receive via WebSocket, send push notification
+    for user_id, delivered in delivery_results.items():
+        if delivered:
+            results["websocket_sent"] += 1
+        else:
+            # Send push notification with smart fallback logic
+            push_sent = await send_push_notification_if_needed(user_id, message)
+            if push_sent:
+                results["push_sent"] += 1
+    
+    # For users not in active connections but in target_user_ids, send push
     connected_users = set(connection_manager.get_all_connections().keys())
     disconnected_users = set(target_user_ids) - connected_users
     
     for user_id in disconnected_users:
-        await send_push_notification_if_needed(user_id, message)
+        push_sent = await send_push_notification_if_needed(user_id, message)
+        if push_sent:
+            results["push_sent"] += 1
     
-    return {
-        "websocket_sent": sum(1 for success in delivery_results.values() if success),
-        "push_sent": len(disconnected_users) + sum(1 for success in delivery_results.values() if not success),
-        "total_users": len(target_user_ids)
-    }
+    return results
 
 # Helper function for legacy code compatibility
 def get_livreurs():
@@ -474,6 +766,8 @@ def get_livreurs():
                 "user_id": user_id,
                 "role": metadata.get("role"),
                 "notifications_enabled": metadata.get("notifications_enabled"),
+                "status": metadata.get("status", "online"),
+                "last_seen": conn.get("last_seen", datetime.now()).isoformat()
             }
 
     return result

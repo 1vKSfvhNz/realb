@@ -9,6 +9,7 @@ import asyncio
 import pickle
 from datetime import datetime, timedelta
 from redis import Redis
+from redis.exceptions import ConnectionError as RedisConnectionError
 from dotenv import load_dotenv
 
 # Configure logging
@@ -30,17 +31,23 @@ class ConnectionManager:
         self.active_connections: Dict[str, Dict[str, Any]] = {}
         self.redis: Optional[Redis] = None
         self.heartbeat_tasks: Dict[str, asyncio.Task] = {}
+        self._redis_initialized = False
         
     def init_redis(self):
         """Initialize Redis connection lazily"""
-        if self.redis is None:
+        if not self._redis_initialized:
             try:
                 self.redis = Redis.from_url(REDIS_URL, decode_responses=False)
+                # Test connection
+                self.redis.ping()
                 logger.info("✅ Redis connection established")
-            except Exception as e:
+                self._redis_initialized = True
+            except (RedisConnectionError, Exception) as e:
                 logger.error(f"❌ Redis connection failed: {e}")
                 # Fall back to in-memory only if Redis fails
                 self.redis = None
+                # Mark as initialized to prevent repeated attempts
+                self._redis_initialized = True
 
     async def connect(self, websocket: WebSocket, user_id: str, user_data: dict) -> bool:
         """
@@ -48,6 +55,19 @@ class ConnectionManager:
         Returns True if connection successful, False otherwise.
         """
         try:
+            # Check if user is already connected
+            if user_id in self.active_connections:
+                old_conn = self.active_connections[user_id]
+                logger.info(f"⚠️ User {user_id} already has an active connection, replacing it")
+                # Stop existing heartbeat
+                self.stop_heartbeat(user_id)
+                # Try to close old connection gracefully
+                try:
+                    await old_conn["ws"].close(code=1000, reason="User connected from another device")
+                except Exception as e:
+                    logger.debug(f"Error closing old connection: {e}")
+            
+            # Accept new connection
             await websocket.accept()
             
             # Store connection in memory
@@ -103,6 +123,8 @@ class ConnectionManager:
         
     def get_connections_by_role(self, role: str) -> List[str]:
         """Get all user_ids with the specified role"""
+        if not role:
+            return []
         return [
             user_id for user_id, conn in self.active_connections.items()
             if conn["metadata"].get("role", "").lower() == role.lower()
@@ -110,10 +132,10 @@ class ConnectionManager:
     
     def start_heartbeat(self, user_id: str):
         """Start a heartbeat task for this connection"""
-        if user_id in self.heartbeat_tasks and not self.heartbeat_tasks[user_id].done():
-            # Task already running
-            return
+        # Cancel any existing task first
+        self.stop_heartbeat(user_id)
             
+        # Create new task
         self.heartbeat_tasks[user_id] = asyncio.create_task(
             self._heartbeat_worker(user_id)
         )
@@ -130,7 +152,13 @@ class ConnectionManager:
         try:
             while user_id in self.active_connections:
                 await asyncio.sleep(HEARTBEAT_INTERVAL)
-                await self.send_heartbeat(user_id)
+                
+                # Only send heartbeat if connection is still active
+                if user_id in self.active_connections:
+                    await self.send_heartbeat(user_id)
+                else:
+                    # Connection is no longer active, exit loop
+                    break
                 
         except asyncio.CancelledError:
             # Task was cancelled, clean up
@@ -198,7 +226,7 @@ class ConnectionManager:
             target_users.update(role_users)
             
         if user_ids:
-            target_users.update(user_ids)
+            target_users.update([str(uid) for uid in user_ids])  # Ensure all IDs are strings
         
         if not role and not user_ids:
             # If no filters provided, broadcast to all
@@ -206,7 +234,8 @@ class ConnectionManager:
         
         # Remove excluded users
         if exclude_ids:
-            target_users = target_users - set(exclude_ids)
+            exclude_set = set([str(uid) for uid in exclude_ids])  # Ensure all IDs are strings
+            target_users = target_users - exclude_set
         
         # Send messages and collect success/failure
         for user_id in target_users:
@@ -221,7 +250,7 @@ class ConnectionManager:
             self.init_redis()
             if self.redis:
                 # Save to Redis with TTL
-                metadata_copy = metadata.copy()
+                metadata_copy = metadata.copy() if metadata else {}
                 # Remove non-serializable items like the WebSocket object
                 if "ws" in metadata_copy:
                     del metadata_copy["ws"]
@@ -249,15 +278,18 @@ class ConnectionManager:
                 # Get existing metadata
                 raw_data = self.redis.get(f"ws:user:{user_id}")
                 if raw_data:
-                    metadata = pickle.loads(raw_data)
-                    metadata["last_disconnected"] = datetime.now().isoformat()
-                    
-                    # Update Redis with new TTL
-                    self.redis.setex(
-                        f"ws:user:{user_id}",
-                        CONNECTION_TTL,
-                        pickle.dumps(metadata)
-                    )
+                    try:
+                        metadata = pickle.loads(raw_data)
+                        metadata["last_disconnected"] = datetime.now().isoformat()
+                        
+                        # Update Redis with new TTL
+                        self.redis.setex(
+                            f"ws:user:{user_id}",
+                            CONNECTION_TTL,
+                            pickle.dumps(metadata)
+                        )
+                    except (pickle.PickleError, Exception) as e:
+                        logger.error(f"❌ Failed to unpickle user metadata: {e}")
             
             # Update in database
             self.update_disconnection_in_db(user_id)
@@ -275,26 +307,29 @@ class ConnectionManager:
                     UserConnection.user_id == user_id
                 ).first()
                 
+                # Filter out non JSON-serializable data
+                serializable_data = {}
+                for k, v in metadata.items():
+                    if isinstance(v, (str, int, float, bool, list, dict)) or v is None:
+                        serializable_data[k] = v
+                
                 if conn:
                     # Update existing record
                     conn.last_connected = datetime.now()
-                    conn.connection_data = json.dumps({
-                        k: v for k, v in metadata.items() 
-                        if isinstance(v, (str, int, float, bool, list, dict))
-                    })
+                    conn.connection_data = json.dumps(serializable_data)
                 else:
                     # Create new record
                     conn = UserConnection(
                         user_id=user_id,
                         last_connected=datetime.now(),
-                        connection_data=json.dumps({
-                            k: v for k, v in metadata.items() 
-                            if isinstance(v, (str, int, float, bool, list, dict))
-                        })
+                        connection_data=json.dumps(serializable_data)
                     )
                     db.add(conn)
                     
                 db.commit()
+            except Exception as e:
+                db.rollback()
+                raise e
             finally:
                 db.close()
                 
@@ -314,6 +349,9 @@ class ConnectionManager:
                 if conn:
                     conn.last_disconnected = datetime.now()
                     db.commit()
+            except Exception as e:
+                db.rollback()
+                raise e
             finally:
                 db.close()
                 
@@ -325,7 +363,7 @@ class ConnectionManager:
         stale_threshold = datetime.now() - timedelta(seconds=HEARTBEAT_INTERVAL * 2)
         stale_connections = [
             user_id for user_id, conn in self.active_connections.items()
-            if conn["last_seen"] < stale_threshold
+            if conn.get("last_seen", datetime.min) < stale_threshold
         ]
         
         for user_id in stale_connections:
@@ -342,9 +380,13 @@ async def periodic_cleanup():
     """Periodic task to clean up stale connections"""
     while True:
         try:
-            connection_manager.cleanup_stale_connections()
+            num_cleaned = connection_manager.cleanup_stale_connections()
+            if num_cleaned > 0:
+                logger.info(f"🧹 Cleaned up {num_cleaned} stale connections")
         except Exception as e:
             logger.error(f"❌ Error in periodic cleanup: {e}")
+        
+        # Sleep for the cleanup interval
         await asyncio.sleep(HEARTBEAT_INTERVAL * 2)
 
 # Start the cleanup task
