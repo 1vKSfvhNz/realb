@@ -117,52 +117,6 @@ async def update_notification_preference(
         logger.error(f"Error updating notification preference: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/api/mark_as_read")
-async def mark_messages_as_read(
-    receipt: ReadReceipt,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Mark messages as read and notify other users"""
-    try:
-        user_id = str(current_user['id'])
-        user = db.query(User).filter(User.id == user_id).first()
-        
-        if not user:
-            raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
-        
-        # Mark messages as read in database
-        # TODO: Implement this in your data model
-        
-        # Send read receipt to all users in the conversation
-        # Get all participants in the conversation
-        # This is a simplified example - you'd need to get real participants
-        participants = ["participant_id_1", "participant_id_2"]  # Replace with actual logic
-        
-        # Remove current user from recipients
-        recipients = [p for p in participants if p != user_id]
-        
-        # Send read receipts to all participants
-        if recipients:
-            read_receipt_message = {
-                "type": "read_receipt",
-                "conversation_id": receipt.conversation_id,
-                "message_ids": receipt.message_ids,
-                "read_by": user_id,
-                "read_at": datetime.now().isoformat()
-            }
-            
-            await connection_manager.broadcast(
-                message=read_receipt_message,
-                user_ids=recipients
-            )
-        
-        return {"status": "success", "marked_messages": len(receipt.message_ids)}
-    
-    except Exception as e:
-        logger.error(f"Error marking messages as read: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
     token = websocket.query_params.get("token")
@@ -395,10 +349,7 @@ async def websocket_notifications(websocket: WebSocket):
             
             # Disconnect user
             connection_manager.disconnect(user_id)
-            
-            # Update user's last seen timestamp in database
-            update_user_last_seen(user_id)
-            
+                        
             # Broadcast offline status to contacts
             if username:
                 # contacts = get_user_contacts(user_id)
@@ -423,20 +374,6 @@ async def websocket_notifications(websocket: WebSocket):
                 connection_manager.disconnect(user_id)
         except:
             pass
-
-def update_user_last_seen(user_id: str):
-    """Update user's last seen timestamp in database"""
-    try:
-        db = SessionLocal()
-        try:
-            user = db.query(User).filter(User.id == user_id).first()
-            if user:
-                user.last_seen = datetime.now()
-                db.commit()
-        finally:
-            db.close()
-    except Exception as e:
-        logger.error(f"Error updating user's last seen: {str(e)}")
 
 # Route to register a device token
 @router.post("/api/register_device")
