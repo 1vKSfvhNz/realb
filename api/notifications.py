@@ -172,32 +172,6 @@ async def websocket_notifications(websocket: WebSocket):
                     await websocket.close(code=1011, reason="Erreur de connexion")
                     return
                 
-                # Send confirmation to client
-                await connection_manager.send_message(user_id, {
-                    "type": "connection_status",
-                    "status": "connected",
-                    "role": role,
-                    "notifications_enabled": notifications_enabled
-                })
-                
-                # Broadcast user's online status to relevant users (contacts/friends)
-                # TODO: Get user's contacts list
-                # contacts = get_user_contacts(user_id, db)
-                contacts = []  # Replace with actual contacts retrieval
-                
-                if contacts:
-                    await connection_manager.broadcast(
-                        message={
-                            "type": "user_status_change",
-                            "user_id": user_id,
-                            "username": username,
-                            "status": "online",
-                            "last_seen": datetime.now().isoformat()
-                        },
-                        user_ids=contacts
-                    )
-                
-                # Main message loop
                 while True:
                     message = await websocket.receive_json()
                     
