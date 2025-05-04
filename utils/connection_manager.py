@@ -53,6 +53,8 @@ class ConnectionManager:
         """
         Register new connection with the manager.
         Returns True if connection successful, False otherwise.
+        
+        Note: The WebSocket should already be accepted before calling this function.
         """
         try:            
             # Check if user is already connected
@@ -67,10 +69,7 @@ class ConnectionManager:
                 except Exception as e:
                     logger.debug(f"Error closing old connection: {e}")
             
-            # Accept new connection
-            await websocket.accept()
-            
-            # Store connection in memory
+            # Store connection in memory - no need to accept here, it should already be accepted
             self.active_connections[user_id] = {
                 "ws": websocket,
                 "connected_at": datetime.now(),
