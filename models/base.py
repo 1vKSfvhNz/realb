@@ -1,4 +1,5 @@
 from os import getenv
+from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import QueuePool
@@ -38,6 +39,7 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
 # Fonction améliorée pour obtenir une connexion à la base de données
+@contextmanager
 def get_db():
     db = SessionLocal()
     try:
