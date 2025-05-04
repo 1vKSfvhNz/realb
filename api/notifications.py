@@ -14,7 +14,6 @@ from datetime import datetime
 from utils.connection_manager import connection_manager, start_cleanup_task
 from aioapns import APNs, NotificationRequest, PushType
 from aioapns.exceptions import ConnectionError
-from contextlib import contextmanager
 
 # WebSocket error
 # Configure logging
@@ -140,7 +139,7 @@ async def websocket_notifications(websocket: WebSocket):
             logger.info(f"✅ Token valide pour l'utilisateur: {user['email']}")
             
             # Open DB session only once
-            with get_db() as db:
+            with next(get_db()) as db:
                 # Optimized query
                 user_info = db.query(User.role, User.notifications, User.username).filter(User.id == user_id).first()
                 if not user_info:
@@ -170,7 +169,7 @@ async def websocket_notifications(websocket: WebSocket):
                 
                 if message.get("type") == "set_notification_preference":
                     # Open a DB connection only when needed
-                    with get_db() as db:
+                    with next(get_db()) as db:
                         new_setting = message.get("enabled", True)
                         conversation_id = message.get("conversation_id")
                         
@@ -390,7 +389,7 @@ _apns_client = None
 # Function to send push notifications - optimized to minimize DB connections
 async def send_push_notification(user_id: str, title: str, body: str, data: dict = None):
     """Send a push notification to a specific user"""
-    with get_db() as db:
+    with next(get_db()) as db:
         # Get both user and device info in one query - more efficient
         user_devices_query = db.query(
             User.notifications,
@@ -569,7 +568,7 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
     Notify users with smart delivery - WebSocket for online users, push for offline users
     """
     # Single DB connection for user retrieval
-    with get_db() as db:
+    with next(get_db()) as db:
         target_user_ids = []
         
         if roles:
