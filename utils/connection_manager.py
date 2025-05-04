@@ -59,7 +59,7 @@ class ConnectionManager:
             if user_id in self.active_connections:
                 old_conn = self.active_connections[user_id]
                 logger.info(f"⚠️ User {user_id} already has an active connection, replacing it")
-                # Stop existing heartbeat
+                # Stop existing heartbeat 
                 self.stop_heartbeat(user_id)
                 # Try to close old connection gracefully
                 try:
@@ -192,6 +192,7 @@ class ConnectionManager:
             return False
     
     async def send_message(self, user_id: str, message: dict) -> bool:
+        print(f'--------------------------------{message}')
         """
         Send a message to a specific user
         Returns True if sent successfully, False otherwise
