@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from models import User, UserDevice, get_db
 from typing import List, Optional
 import httpx
-import json
 import logging
 from os import getenv
 from utils.security import get_current_user_from_token, get_current_user
@@ -38,7 +37,6 @@ start_cleanup_task()
 class NotificationPreference(BaseModel):
     enabled: bool
     preference_type: str = "push"
-    conversation_id: Optional[str] = None  # Pour notifications par conversation
 
 # Pydantic model for device registration
 class DeviceRegistration(BaseModel):
@@ -62,12 +60,7 @@ async def get_notification_preference(
         user = db.query(User).filter(User.email == current_user['email']).first()
         if not user:
             raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
-        
-        if conversation_id:
-            # Get conversation-specific preference
-            # For now, return global preference
-            return {"enabled": user.notifications, "conversation_id": conversation_id}
-        
+                
         # Return global preference
         return {"enabled": user.notifications}
     except Exception as e:
@@ -87,28 +80,12 @@ async def update_notification_preference(
         if not user:
             raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
         
-        if preference.conversation_id:
-            # Set conversation-specific preference
-            # TODO: Implement conversation preferences in your data model
-            pass
-        else:
-            # Update global preference
-            user.notifications = preference.enabled
-            db.commit()
-        
-        # If user is connected via WebSocket, sync the preference
-        user_id = str(user.id)
-        if connection_manager.is_connected(user_id):
-            await connection_manager.send_message(user_id, {
-                "type": preference.preference_type,
-                "enabled": preference.enabled,
-                "conversation_id": preference.conversation_id
-            })
-        
+        user.notifications = preference.enabled
+        db.commit()
+            
         return {
             "message": "Notification preference updated", 
-            "enabled": preference.enabled,
-            "conversation_id": preference.conversation_id
+            "enabled": preference.enabled
         }
     except Exception as e:
         db.rollback()
@@ -158,162 +135,13 @@ async def websocket_notifications(websocket: WebSocket):
                     "status": "online",
                     "muted_conversations": []  # Initialize muted conversations list
                 }
+
+                # Connect using the connection manager
+                success = await connection_manager.connect(websocket, user_id, user_data)
+                if not success:
+                    await websocket.close(code=1011, reason="Erreur de connexion")
+                    return            
             
-            # Connect using the connection manager
-            success = await connection_manager.connect(websocket, user_id, user_data)
-            if not success:
-                await websocket.close(code=1011, reason="Erreur de connexion")
-                return
-            
-            # Set a reasonable timeout for receiving messages
-            websocket_timeout = 60  # 60 seconds timeout
-            
-            while True:
-                # Use asyncio.wait_for to prevent indefinite waiting
-                try:
-                    message = await asyncio.wait_for(
-                        websocket.receive_json(), 
-                        timeout=websocket_timeout
-                    )
-                except asyncio.TimeoutError:
-                    # Check if connection is still valid
-                    if not connection_manager.is_connected(user_id):
-                        logger.info(f"Connection for user {user_id} no longer valid")
-                        break
-                    
-                    # Send a ping to check if client is still alive
-                    try:
-                        await websocket.send_json({"type": "ping"})
-                        # Reset the connection's last_seen timestamp
-                        conn = connection_manager.get_connection(user_id)
-                        if conn:
-                            conn["last_seen"] = datetime.now()
-                        continue
-                    except Exception:
-                        logger.info(f"Failed to ping user {user_id}, disconnecting")
-                        break
-                
-                if message.get("type") == "set_notification_preference":
-                    # Open a DB connection only when needed
-                    with next(get_db()) as db:
-                        new_setting = message.get("enabled", True)
-                        conversation_id = message.get("conversation_id")
-                        
-                        if conversation_id:
-                            # Update connection metadata for muted conversations
-                            conn = connection_manager.get_connection(user_id)
-                            if conn and "muted_conversations" in conn["metadata"]:
-                                if new_setting == False:  # Muting
-                                    if conversation_id not in conn["metadata"]["muted_conversations"]:
-                                        conn["metadata"]["muted_conversations"].append(conversation_id)
-                                else:  # Unmuting
-                                    if conversation_id in conn["metadata"]["muted_conversations"]:
-                                        conn["metadata"]["muted_conversations"].remove(conversation_id)
-                        else:
-                            # Global preference - update once in DB
-                            user_obj = db.query(User).filter(User.id == user_id).first()
-                            if user_obj:  # Make sure user exists
-                                user_obj.notifications = new_setting
-                                db.commit()
-                                
-                                # Update the connection metadata
-                                conn = connection_manager.get_connection(user_id)
-                                if conn:
-                                    conn["metadata"]["notifications_enabled"] = new_setting
-                            else:
-                                logger.warning(f"User {user_id} not found in database")
-                        
-                        # Confirm to the client
-                        await connection_manager.send_message(user_id, {
-                            "type": "notification_preference_updated",
-                            "enabled": new_setting,
-                            "conversation_id": conversation_id
-                        })
-                
-                elif message.get("type") == "set_status":
-                    # Update user status (away, busy, etc.)
-                    new_status = message.get("status", "online")
-                    
-                    # Update connection metadata
-                    conn = connection_manager.get_connection(user_id)
-                    if conn:
-                        conn["metadata"]["status"] = new_status
-                        
-                        # Get user's contacts - implement proper retrieval
-                        contacts = []  # Replace with actual contacts retrieval
-                        
-                        # Broadcast status change
-                        if contacts:
-                            await connection_manager.broadcast(
-                                message={
-                                    "type": "user_status_change",
-                                    "user_id": user_id,
-                                    "username": username,
-                                    "status": new_status,
-                                    "last_seen": datetime.now().isoformat()
-                                },
-                                user_ids=contacts
-                            )
-                
-                elif message.get("type") == "typing_indicator":
-                    # Handle typing indicators
-                    conversation_id = message.get("conversation_id")
-                    is_typing = message.get("is_typing", False)
-                    
-                    if conversation_id:
-                        # Get conversation participants - implement proper retrieval
-                        participants = []  # Replace with actual participants retrieval
-                        
-                        # Remove current user
-                        recipients = [p for p in participants if p != user_id]
-                        
-                        # Broadcast typing status
-                        if recipients:
-                            await connection_manager.broadcast(
-                                message={
-                                    "type": "typing_indicator",
-                                    "conversation_id": conversation_id,
-                                    "user_id": user_id,
-                                    "username": username,
-                                    "is_typing": is_typing
-                                },
-                                user_ids=recipients
-                            )
-                
-                elif message.get("type") == "mark_as_read":
-                    # Handle read receipts through WebSocket
-                    conversation_id = message.get("conversation_id")
-                    message_ids = message.get("message_ids", [])
-                    
-                    if conversation_id and message_ids:
-                        # Get conversation participants - implement proper retrieval
-                        participants = []  # Replace with actual participants retrieval
-                        
-                        # Remove current user
-                        recipients = [p for p in participants if p != user_id]
-                        
-                        # Send read receipts
-                        if recipients:
-                            await connection_manager.broadcast(
-                                message={
-                                    "type": "read_receipt",
-                                    "conversation_id": conversation_id,
-                                    "message_ids": message_ids,
-                                    "read_by": user_id,
-                                    "read_at": datetime.now().isoformat()
-                                },
-                                user_ids=recipients
-                            )
-                
-                elif message.get("type") == "pong":
-                    # Update last seen timestamp for heartbeat
-                    conn = connection_manager.get_connection(user_id)
-                    if conn:
-                        conn["last_seen"] = datetime.now()
-                
-                else:
-                    logger.info(f"Unhandled message type received: {message.get('type')}")
-        
         except ValueError as ve:
             logger.error(f"❌ Authentication error: {str(ve)}")
             # Don't accept the connection if token is invalid

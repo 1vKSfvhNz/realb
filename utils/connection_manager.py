@@ -191,7 +191,6 @@ class ConnectionManager:
             return False
     
     async def send_message(self, user_id: str, message: dict) -> bool:
-        print(f'--------------------------------{message}')
         """
         Send a message to a specific user
         Returns True if sent successfully, False otherwise
