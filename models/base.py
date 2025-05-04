@@ -19,7 +19,7 @@ engine = create_engine(
     DATABASE_URL, 
     poolclass=QueuePool,
     pool_size=10,            # Augmenté pour gérer les pics de trafic
-    max_overflow=30,         # Augmenté pour éviter les timeouts
+    max_overflow=40,         # Augmenté pour éviter les timeouts
     pool_timeout=90,         # Délai suffisant pour obtenir une connexion
     pool_recycle=300,       # Recycle les connexions après une heure
     pool_pre_ping=True,      # Vérifie que les connexions sont valides
