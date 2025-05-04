@@ -21,7 +21,7 @@ engine = create_engine(
     pool_size=20,            # Augmenté pour gérer les pics de trafic
     max_overflow=30,         # Augmenté pour éviter les timeouts
     pool_timeout=90,         # Délai suffisant pour obtenir une connexion
-    pool_recycle=1800,       # Recycle les connexions après une heure
+    pool_recycle=300,       # Recycle les connexions après une heure
     pool_pre_ping=True,      # Vérifie que les connexions sont valides
     echo_pool=True           # Active la journalisation du pool en développement
 )
