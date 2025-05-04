@@ -1,6 +1,7 @@
 from os import getenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
+from sqlalchemy.pool import QueuePool
 from dotenv import load_dotenv
 import logging
 
@@ -16,7 +17,8 @@ DATABASE_URL = getenv('URL')
 # Configuration optimisée du pool de connexions
 engine = create_engine(
     DATABASE_URL, 
-    pool_size=50,            # Augmenté pour gérer les pics de trafic
+    poolclass=QueuePool,
+    pool_size=25,            # Augmenté pour gérer les pics de trafic
     max_overflow=50,         # Augmenté pour éviter les timeouts
     pool_timeout=90,         # Délai suffisant pour obtenir une connexion
     pool_recycle=1800,       # Recycle les connexions après une heure
