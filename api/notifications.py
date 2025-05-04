@@ -14,8 +14,8 @@ from datetime import datetime
 from utils.connection_manager import connection_manager, start_cleanup_task
 from aioapns import APNs, NotificationRequest, PushType
 from aioapns.exceptions import ConnectionError
+import asyncio
 
-# WebSocket error
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -117,16 +117,16 @@ async def update_notification_preference(
 
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
-    
-    token = websocket.query_params.get("token")
-    if not token:
-        logger.warning("❌ Token manquant")
-        await websocket.close(code=1008, reason="Token manquant")
-        return
-    
-    logger.info(f"🔄 Vérification du token: {token[:10]}...")
-    
+    user_id = None
     try:
+        token = websocket.query_params.get("token")
+        if not token:
+            logger.warning("❌ Token manquant")
+            await websocket.close(code=1008, reason="Token manquant")
+            return
+        
+        logger.info(f"🔄 Vérification du token: {token[:10]}...")
+        
         # Verify token before accepting connection
         try:
             user = get_current_user_from_token(token=token)
@@ -155,7 +155,8 @@ async def websocket_notifications(websocket: WebSocket):
                     "notifications_enabled": notifications_enabled,
                     "username": username,
                     "user_id": user_id,
-                    "status": "online"
+                    "status": "online",
+                    "muted_conversations": []  # Initialize muted conversations list
                 }
             
             # Connect using the connection manager
@@ -164,8 +165,33 @@ async def websocket_notifications(websocket: WebSocket):
                 await websocket.close(code=1011, reason="Erreur de connexion")
                 return
             
+            # Set a reasonable timeout for receiving messages
+            websocket_timeout = 60  # 60 seconds timeout
+            
             while True:
-                message = await websocket.receive_json()
+                # Use asyncio.wait_for to prevent indefinite waiting
+                try:
+                    message = await asyncio.wait_for(
+                        websocket.receive_json(), 
+                        timeout=websocket_timeout
+                    )
+                except asyncio.TimeoutError:
+                    # Check if connection is still valid
+                    if not connection_manager.is_connected(user_id):
+                        logger.info(f"Connection for user {user_id} no longer valid")
+                        break
+                    
+                    # Send a ping to check if client is still alive
+                    try:
+                        await websocket.send_json({"type": "ping"})
+                        # Reset the connection's last_seen timestamp
+                        conn = connection_manager.get_connection(user_id)
+                        if conn:
+                            conn["last_seen"] = datetime.now()
+                        continue
+                    except Exception:
+                        logger.info(f"Failed to ping user {user_id}, disconnecting")
+                        break
                 
                 if message.get("type") == "set_notification_preference":
                     # Open a DB connection only when needed
@@ -186,13 +212,16 @@ async def websocket_notifications(websocket: WebSocket):
                         else:
                             # Global preference - update once in DB
                             user_obj = db.query(User).filter(User.id == user_id).first()
-                            user_obj.notifications = new_setting
-                            db.commit()
-                            
-                            # Update the connection metadata
-                            conn = connection_manager.get_connection(user_id)
-                            if conn:
-                                conn["metadata"]["notifications_enabled"] = new_setting
+                            if user_obj:  # Make sure user exists
+                                user_obj.notifications = new_setting
+                                db.commit()
+                                
+                                # Update the connection metadata
+                                conn = connection_manager.get_connection(user_id)
+                                if conn:
+                                    conn["metadata"]["notifications_enabled"] = new_setting
+                            else:
+                                logger.warning(f"User {user_id} not found in database")
                         
                         # Confirm to the client
                         await connection_manager.send_message(user_id, {
@@ -210,7 +239,7 @@ async def websocket_notifications(websocket: WebSocket):
                     if conn:
                         conn["metadata"]["status"] = new_status
                         
-                        # Get user's contacts
+                        # Get user's contacts - implement proper retrieval
                         contacts = []  # Replace with actual contacts retrieval
                         
                         # Broadcast status change
@@ -232,7 +261,7 @@ async def websocket_notifications(websocket: WebSocket):
                     is_typing = message.get("is_typing", False)
                     
                     if conversation_id:
-                        # Get conversation participants - no DB needed
+                        # Get conversation participants - implement proper retrieval
                         participants = []  # Replace with actual participants retrieval
                         
                         # Remove current user
@@ -257,7 +286,7 @@ async def websocket_notifications(websocket: WebSocket):
                     message_ids = message.get("message_ids", [])
                     
                     if conversation_id and message_ids:
-                        # Get conversation participants - no DB needed
+                        # Get conversation participants - implement proper retrieval
                         participants = []  # Replace with actual participants retrieval
                         
                         # Remove current user
@@ -292,8 +321,8 @@ async def websocket_notifications(websocket: WebSocket):
             return
     
     except WebSocketDisconnect:
-        logger.info(f"🔌 WebSocket disconnect ({user_id if 'user_id' in locals() else 'unknown'})")
-        if 'user_id' in locals():
+        logger.info(f"🔌 WebSocket disconnect ({user_id if user_id is not None else 'unknown'})")
+        if user_id is not None:
             # Get user data before disconnecting
             conn = connection_manager.get_connection(user_id)
             username = conn["metadata"].get("username") if conn else None
@@ -320,10 +349,13 @@ async def websocket_notifications(websocket: WebSocket):
         logger.error(f"❌ WebSocket error: {str(e)}")
         try:
             await websocket.close(code=1008, reason=f"Error: {str(e)[:50]}")
-            if 'user_id' in locals():
+            if user_id is not None:
                 connection_manager.disconnect(user_id)
-        except:
-            pass
+        except Exception as close_error:
+            logger.error(f"Error closing websocket: {close_error}")
+            # Ensure connection is removed from manager even if closing fails
+            if user_id is not None:
+                connection_manager.disconnect(user_id)
 
 # Route to register a device token - reuse DB session from dependency
 @router.post("/api/register_device")
@@ -389,103 +421,122 @@ _apns_client = None
 # Function to send push notifications - optimized to minimize DB connections
 async def send_push_notification(user_id: str, title: str, body: str, data: dict = None):
     """Send a push notification to a specific user"""
-    with next(get_db()) as db:
-        # Get both user and device info in one query - more efficient
-        user_devices_query = db.query(
-            User.notifications,
-            UserDevice.device_token,
-            UserDevice.platform
-        ).join(
-            UserDevice, User.id == UserDevice.user_id
-        ).filter(
-            User.id == user_id
-        )
-        
-        user_devices = user_devices_query.all()
-        
-        if not user_devices:
-            logger.info(f"No registered devices or user {user_id} not found")
-            return
-        
-        # Check if notifications are enabled (first result)
-        if not user_devices[0][0]:  # notifications flag
-            logger.info(f"User {user_id} has disabled notifications")
-            return
-        
-        # Check if conversation is muted (if applicable)
-        conversation_id = data.get("conversation_id") if data else None
-        
-        # Send to all user devices
-        for _, device_token, platform in user_devices:
-            if platform.lower() == 'android':
-                await send_fcm_notification(device_token, title, body, data)
-            elif platform.lower() == 'ios':
-                await send_apns_notification(device_token, title, body, data)
+    try:
+        with next(get_db()) as db:
+            # Get both user and device info in one query - more efficient
+            user_devices_query = db.query(
+                User.notifications,
+                UserDevice.device_token,
+                UserDevice.platform
+            ).join(
+                UserDevice, User.id == UserDevice.user_id
+            ).filter(
+                User.id == user_id
+            )
+            
+            user_devices = user_devices_query.all()
+            
+            if not user_devices:
+                logger.info(f"No registered devices or user {user_id} not found")
+                return
+            
+            # Check if notifications are enabled (first result)
+            if not user_devices[0][0]:  # notifications flag
+                logger.info(f"User {user_id} has disabled notifications")
+                return
+            
+            # Check if conversation is muted (if applicable)
+            conversation_id = data.get("conversation_id") if data else None
+            
+            # Send to all user devices
+            for _, device_token, platform in user_devices:
+                try:
+                    if platform.lower() == 'android':
+                        await send_fcm_notification(device_token, title, body, data)
+                    elif platform.lower() == 'ios':
+                        await send_apns_notification(device_token, title, body, data)
+                except Exception as device_error:
+                    logger.error(f"Error sending notification to device {device_token}: {str(device_error)}")
+    except Exception as e:
+        logger.error(f"Error in send_push_notification for user {user_id}: {str(e)}")
 
 async def send_push_notification_if_needed(user_id: str, message: dict):
     """Send push notifications only if necessary"""
-    # First check if the user is connected - if connected, don't send push
-    if connection_manager.is_connected(user_id):
-        logger.info(f"User {user_id} is connected, skipping push notification")
+    try:
+        # First check if the user is connected - if connected, don't send push
+        if connection_manager.is_connected(user_id):
+            logger.info(f"User {user_id} is connected, skipping push notification")
+            return False
+        
+        # Check if required fields are present
+        if "title" in message and "body" in message:
+            # Send the notification
+            await send_push_notification(
+                user_id, 
+                message["title"], 
+                message["body"], 
+                data=message.get("data", {})
+            )
+            return True
+        
         return False
-    
-    # Check if required fields are present
-    if "title" in message and "body" in message:
-        # Send the notification
-        await send_push_notification(
-            user_id, 
-            message["title"], 
-            message["body"], 
-            data=message.get("data", {})
-        )
-        return True
-    
-    return False
+    except Exception as e:
+        logger.error(f"Error in send_push_notification_if_needed for user {user_id}: {str(e)}")
+        return False
 
 # Send FCM notification (Firebase Cloud Messaging) for Android
 async def send_fcm_notification(token: str, title: str, body: str, data: dict = None):
-    url = "https://fcm.googleapis.com/fcm/send"
-    headers = {
-        "Authorization": f"key={FIREBASE_SERVER_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    # Prepare basic payload
-    payload = {
-        "to": token,
-        "notification": {
-            "title": title,
-            "body": body,
-            "sound": "default",
-            "badge": 1,  # Increment badge count
-            "channelId": "default"
-        },
-        "priority": "high"
-    }
-    
-    # Add data payload for the app to process
-    if data:
-        # Add conversation ID for grouping
-        if "conversation_id" in data:
-            payload["android"] = {
-                "notification": {
-                    "tag": data["conversation_id"],  # Group by conversation
-                    "color": "#25D366"
+    try:
+        url = "https://fcm.googleapis.com/fcm/send"
+        headers = {
+            "Authorization": f"key={FIREBASE_SERVER_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        # Prepare basic payload
+        payload = {
+            "to": token,
+            "notification": {
+                "title": title,
+                "body": body,
+                "sound": "default",
+                "badge": 1,  # Increment badge count
+                "channelId": "default"
+            },
+            "priority": "high"
+        }
+        
+        # Add data payload for the app to process
+        if data:
+            # Add conversation ID for grouping
+            if "conversation_id" in data:
+                payload["android"] = {
+                    "notification": {
+                        "tag": data["conversation_id"],  # Group by conversation
+                        "color": "#25D366"
+                    }
                 }
-            }
-        
-        # Add data for app processing
-        payload["data"] = data
-        
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
-            logger.info(f"FCM notification sent: {response.text}")
-            return True
-        except Exception as e:
-            logger.error(f"Error sending FCM: {e}")
-            return False
+            
+            # Add data for app processing
+            payload["data"] = data
+            
+        # Set a timeout for the HTTP request
+        timeout = httpx.Timeout(10.0, connect=5.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            try:
+                response = await client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                logger.info(f"FCM notification sent: {response.text}")
+                return True
+            except httpx.HTTPStatusError as e:
+                logger.error(f"FCM HTTP error: {e.response.status_code} - {e.response.text}")
+                return False
+            except httpx.RequestError as e:
+                logger.error(f"FCM request failed: {str(e)}")
+                return False
+    except Exception as e:
+        logger.error(f"Error sending FCM: {e}")
+        return False
 
 async def initialize_apns_client():
     """Initialize and return an APNS client - with caching."""
@@ -545,15 +596,22 @@ async def send_apns_notification(token: str, title: str, body: str, data: dict =
             push_type=PushType.ALERT
         )
         
-        # Send notification
-        response = await apns_client.send_notification(notification)
-        
-        # Check response
-        if hasattr(response, 'is_successful') and response.is_successful:
-            logger.info(f"APNS notification sent successfully to {token}")
-            return True
-        else:
-            logger.error(f"APNS send failed: {response.description}")
+        # Send notification with timeout
+        try:
+            response = await asyncio.wait_for(
+                apns_client.send_notification(notification),
+                timeout=10.0  # 10 seconds timeout
+            )
+            
+            # Check response
+            if hasattr(response, 'is_successful') and response.is_successful:
+                logger.info(f"APNS notification sent successfully to {token}")
+                return True
+            else:
+                logger.error(f"APNS send failed: {response.description}")
+                return False
+        except asyncio.TimeoutError:
+            logger.error(f"APNS request timed out for token {token}")
             return False
             
     except ConnectionError as e:
@@ -567,62 +625,74 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
     """
     Notify users with smart delivery - WebSocket for online users, push for offline users
     """
-    # Single DB connection for user retrieval
-    with next(get_db()) as db:
-        target_user_ids = []
-        
-        if roles:
-            # Query only users with notifications enabled
-            query = db.query(User.id).filter(User.notifications == True)
+    try:
+        # Single DB connection for user retrieval
+        with next(get_db()) as db:
+            target_user_ids = []
             
-            # Apply role filter
             if roles:
-                query = query.filter(func.lower(User.role).in_([r.lower() for r in roles]))                
+                # Query only users with notifications enabled
+                query = db.query(User.id).filter(User.notifications == True)
+                
+                # Apply role filter
+                if roles:
+                    query = query.filter(func.lower(User.role).in_([r.lower() for r in roles]))                
 
-            # Convert to list of string IDs
-            target_user_ids = [str(u.id) for u in query.all()]
-    
-    # If specific user_ids were provided, add them to the target list
-    if user_ids:
-        target_user_ids.extend([str(uid) for uid in user_ids])
-    
-    # Remove excluded IDs
-    if exclude_ids:
-        target_user_ids = [uid for uid in target_user_ids if uid not in exclude_ids]
-    
-    # First try WebSocket delivery for connected users
-    delivery_results = await connection_manager.broadcast(
-        message=message,
-        user_ids=target_user_ids if target_user_ids else None
-    )
-    
-    # Track notification results
-    results = {
-        "websocket_sent": 0,
-        "push_sent": 0,
-        "total_users": len(target_user_ids)
-    }
-    
-    # For users who didn't receive via WebSocket, send push notification
-    for user_id, delivered in delivery_results.items():
-        if delivered:
-            results["websocket_sent"] += 1
-        else:
-            # Send push notification with smart fallback logic
-            push_sent = await send_push_notification_if_needed(user_id, message)
-            if push_sent:
-                results["push_sent"] += 1
-    
-    # For users not in active connections but in target_user_ids, send push
-    connected_users = set(connection_manager.get_all_connections().keys())
-    disconnected_users = set(target_user_ids) - connected_users
-    
-    for user_id in disconnected_users:
-        push_sent = await send_push_notification_if_needed(user_id, message)
-        if push_sent:
-            results["push_sent"] += 1
-    
-    return results
+                # Convert to list of string IDs
+                target_user_ids = [str(u.id) for u in query.all()]
+        
+        # If specific user_ids were provided, add them to the target list
+        if user_ids:
+            target_user_ids.extend([str(uid) for uid in user_ids])
+        
+        # Remove excluded IDs
+        if exclude_ids:
+            target_user_ids = [uid for uid in target_user_ids if uid not in exclude_ids]
+        
+        # First try WebSocket delivery for connected users
+        delivery_results = await connection_manager.broadcast(
+            message=message,
+            user_ids=target_user_ids if target_user_ids else None
+        )
+        
+        # Track notification results
+        results = {
+            "websocket_sent": 0,
+            "push_sent": 0,
+            "total_users": len(target_user_ids)
+        }
+        
+        # Process results in batches to prevent too many concurrent tasks
+        batch_size = 10
+        for i in range(0, len(target_user_ids), batch_size):
+            batch_user_ids = target_user_ids[i:i+batch_size]
+            batch_tasks = []
+            
+            for user_id in batch_user_ids:
+                delivered = delivery_results.get(user_id, False)
+                if delivered:
+                    results["websocket_sent"] += 1
+                else:
+                    # Queue push notification task
+                    task = asyncio.create_task(send_push_notification_if_needed(user_id, message))
+                    batch_tasks.append((user_id, task))
+            
+            # Wait for batch completion
+            if batch_tasks:
+                for user_id, task in batch_tasks:
+                    try:
+                        push_sent = await asyncio.wait_for(task, timeout=15.0)
+                        if push_sent:
+                            results["push_sent"] += 1
+                    except asyncio.TimeoutError:
+                        logger.error(f"Push notification timed out for user {user_id}")
+                    except Exception as e:
+                        logger.error(f"Error sending push to user {user_id}: {str(e)}")
+        
+        return results
+    except Exception as e:
+        logger.error(f"Error in notify_users: {str(e)}")
+        return {"error": str(e), "websocket_sent": 0, "push_sent": 0, "total_users": 0}
 
 # Helper function for legacy code compatibility
 def get_livreurs():
@@ -630,23 +700,27 @@ def get_livreurs():
     Returns a dictionary of connected delivery drivers
     Compatible with old format for existing integrations
     """
-    result = {}
+    try:
+        result = {}
 
-    # Get all connections with role 'deliver'
-    deliver_connections = connection_manager.get_connections_by_role('deliver')
+        # Get all connections with role 'deliver'
+        deliver_connections = connection_manager.get_connections_by_role('deliver')
 
-    # Create compatible dictionary format
-    for user_id in deliver_connections:
-        conn = connection_manager.get_connection(user_id)
-        if conn:
-            metadata = conn.get("metadata", {})
-            result[user_id] = {
-                "username": metadata.get("username"),
-                "user_id": user_id,
-                "role": metadata.get("role"),
-                "notifications_enabled": metadata.get("notifications_enabled"),
-                "status": metadata.get("status", "online"),
-                "last_seen": conn.get("last_seen", datetime.now()).isoformat()
-            }
+        # Create compatible dictionary format
+        for user_id in deliver_connections:
+            conn = connection_manager.get_connection(user_id)
+            if conn:
+                metadata = conn.get("metadata", {})
+                result[user_id] = {
+                    "username": metadata.get("username"),
+                    "user_id": user_id,
+                    "role": metadata.get("role"),
+                    "notifications_enabled": metadata.get("notifications_enabled"),
+                    "status": metadata.get("status", "online"),
+                    "last_seen": conn.get("last_seen", datetime.now()).isoformat()
+                }
 
-    return result
+        return result
+    except Exception as e:
+        logger.error(f"Error in get_livreurs: {str(e)}")
+        return {}
