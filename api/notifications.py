@@ -282,6 +282,7 @@ async def send_push_notification_if_needed(user_id: str, message: dict):
         # Check if required fields are present
         if "title" in message and "body" in message:
             # Send the notification
+            print('++++++++++++++++++++++++++++++++++++++++++++++')
             await send_push_notification(
                 user_id, 
                 message["title"], 
@@ -298,6 +299,7 @@ async def send_push_notification_if_needed(user_id: str, message: dict):
 # Send FCM notification (Firebase Cloud Messaging) for Android
 async def send_fcm_notification(token: str, title: str, body: str, data: dict = None):
     try:
+        print('========================================')
         url = "https://fcm.googleapis.com/fcm/send"
         headers = {
             "Authorization": f"key={FIREBASE_SERVER_KEY}",
@@ -475,7 +477,7 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
         
         # Process results in batches to prevent too many concurrent tasks
         batch_size = 10
-        print(len(target_user_ids))
+        print(target_user_ids)
         for i in range(0, len(target_user_ids), batch_size):
             batch_user_ids = target_user_ids[i:i+batch_size]
             batch_tasks = []
@@ -486,7 +488,6 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
                     results["websocket_sent"] += 1
                 else:
                     # Queue push notification task
-                    print('============================================')
                     task = asyncio.create_task(send_push_notification_if_needed(user_id, message))
                     batch_tasks.append((user_id, task))
             
