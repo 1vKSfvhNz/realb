@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from models import User, UserDevice, get_db
-from typing import List, Optional
+from typing import List, Dict, Any
 import httpx
 import logging
 from os import getenv
@@ -14,18 +14,35 @@ from utils.connection_manager import connection_manager, start_cleanup_task
 from aioapns import APNs, NotificationRequest, PushType
 from aioapns.exceptions import ConnectionError
 import asyncio
+import firebase_admin
+from firebase_admin import credentials, messaging
+from contextlib import asynccontextmanager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Environment variables
 FIREBASE_SERVER_KEY = getenv("FIREBASE_SERVER_KEY")
-# Configuration APNS
+PROJECT_ID = getenv("PROJECT_ID")
 APNS_BUNDLE_ID = getenv("APNS_BUNDLE_ID")
 APNS_KEY_PATH = getenv("APNS_KEY_PATH", "/path/to/your/apns_key.p8")
 APNS_KEY_ID = getenv("APNS_KEY_ID")
 APNS_TEAM_ID = getenv("APNS_TEAM_ID")
 USE_SANDBOX = getenv("APNS_SANDBOX", "False").lower() == "true"
+
+# Initialize Firebase - only if not already initialized
+if not firebase_admin._apps:
+    try:
+        cred_path = getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if cred_path:
+            cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred)
+            logger.info("Firebase initialized successfully")
+        else:
+            logger.error("GOOGLE_APPLICATION_CREDENTIALS not set")
+    except Exception as e:
+        logger.error(f"Failed to initialize Firebase: {str(e)}")
 
 # Router for our endpoints
 router = APIRouter()
@@ -33,40 +50,57 @@ router = APIRouter()
 # Start the connection cleanup task when the router is loaded
 start_cleanup_task()
 
-# Pydantic model for notification preferences
+# Pydantic models
 class NotificationPreference(BaseModel):
     enabled: bool
     preference_type: str = "push"
 
-# Pydantic model for device registration
 class DeviceRegistration(BaseModel):
     device_token: str
     platform: str
     app_version: str
     device_name: str
 
-# Pydantic model for read receipts
-class ReadReceipt(BaseModel):
-    message_ids: List[str]
-    conversation_id: str
+# APNS client cache and management
+class APNSClientManager:
+    def __init__(self):
+        self._client = None
+        self._lock = asyncio.Lock()
+    
+    async def get_client(self) -> APNs:
+        """Get or initialize APNS client with proper locking"""
+        async with self._lock:
+            if not self._client:
+                try:
+                    self._client = APNs(
+                        key_path=APNS_KEY_PATH,
+                        key_id=APNS_KEY_ID,
+                        team_id=APNS_TEAM_ID,
+                        bundle_id=APNS_BUNDLE_ID,
+                        use_sandbox=USE_SANDBOX
+                    )
+                    logger.info("APNS client initialized")
+                except Exception as e:
+                    logger.error(f"Error initializing APNS client: {e}")
+                    raise
+            return self._client
 
-# REST Routes with /api prefix
+apns_manager = APNSClientManager()
+
+# REST Routes
 @router.get("/api/notification_preference")
 async def get_notification_preference(
-    conversation_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get notification preferences, globally or for a specific conversation"""
+    """Get notification preferences for the current user"""
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
         if not user:
             raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
                 
-        # Return global preference
         return {"enabled": user.notifications}
     except Exception as e:
-        db.rollback()
         logger.error(f"Error retrieving notification preference: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -76,7 +110,7 @@ async def update_notification_preference(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update notification preferences, globally or for a specific conversation"""
+    """Update notification preferences for the current user"""
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
         if not user:
@@ -96,90 +130,80 @@ async def update_notification_preference(
 
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
-    await websocket.accept()
+    """WebSocket endpoint for real-time notifications"""
+    user_id = None
+    
     try:
+        await websocket.accept()
+        
+        # Get and validate token
         token = websocket.query_params.get("token")
         if not token:
-            logger.warning("❌ Token manquant")
-            await websocket.close(code=1008, reason="Token manquant")
+            await websocket.close(code=1008, reason="Token missing")
             return
         
-        logger.info(f"🔄 Vérification du token: {token[:10]}...")
-        
-        # Verify token before accepting connection
+        # Verify token and get user
         try:
             user = get_current_user_from_token(token=token)
             if not user:
-                logger.error("❌ Utilisateur non trouvé après vérification du token")
-                await websocket.close(code=1008, reason="Utilisateur non trouvé")
+                await websocket.close(code=1008, reason="Invalid token")
                 return
                 
             user_id = str(user["id"])
-            logger.info(f"✅ Token valide pour l'utilisateur: {user['email']}")
             
-            # Open DB session only once
-            with next(get_db()) as db:
-                # Optimized query
+            # Use a context manager for DB session
+            async with get_db_context() as db:
+                # Get essential user info in one query
                 user_info = db.query(User.role, User.notifications, User.username).filter(User.id == user_id).first()
                 if not user_info:
-                    logger.warning(f"❌ Utilisateur {user_id} non trouvé dans la base de données")
-                    await websocket.close(code=1008, reason="Utilisateur non trouvé")
+                    await websocket.close(code=1008, reason="User not found")
                     return
                 
                 role, notifications_enabled, username = user_info
                 
-                # Prepare user metadata for the connection manager
+                # Prepare user metadata
                 user_data = {
                     "role": role,
                     "notifications_enabled": notifications_enabled,
                     "username": username,
                     "user_id": user_id,
                     "status": "online",
-                    "muted_conversations": []  # Initialize muted conversations list
+                    "muted_conversations": []
                 }
 
                 # Connect using the connection manager
                 success = await connection_manager.connect(websocket, user_id, user_data)
                 if not success:
-                    await websocket.close(code=1011, reason="Erreur de connexion")
-                    return            
-            
+                    await websocket.close(code=1011, reason="Connection error")
+                    return
+                
+                # Keep connection alive
+                while True:
+                    data = await websocket.receive_text()
+                    # Process any incoming messages if needed
+        
         except ValueError as ve:
-            logger.error(f"❌ Authentication error: {str(ve)}")
-            # Don't accept the connection if token is invalid
-            await websocket.close(code=1008, reason=f"Authentication failed: {str(ve)}")
+            logger.error(f"Authentication error: {str(ve)}")
+            await websocket.close(code=1008, reason="Authentication failed")
             return
     
     except WebSocketDisconnect:
-        logger.info(f"🔌 WebSocket disconnect ({user_id if user_id is not None else 'unknown'})")
-        if user_id is not None:
-            # Get user data before disconnecting
-            conn = connection_manager.get_connection(user_id)
-            username = conn["metadata"].get("username") if conn else None
-            
-            # Disconnect user
-            connection_manager.disconnect(user_id)                        
+        logger.info(f"WebSocket disconnect (user_id: {user_id or 'unknown'})")
     except Exception as e:
-        logger.error(f"❌ WebSocket error: {str(e)}")
-        try:
-            await websocket.close(code=1008, reason=f"Error: {str(e)[:50]}")
-            if user_id is not None:
-                connection_manager.disconnect(user_id)
-        except Exception as close_error:
-            logger.error(f"Error closing websocket: {close_error}")
-            # Ensure connection is removed from manager even if closing fails
-            if user_id is not None:
-                connection_manager.disconnect(user_id)
+        logger.error(f"WebSocket error: {str(e)}")
+    finally:
+        # Always clean up connection on exit
+        if user_id:
+            connection_manager.disconnect(user_id)
 
-# Route to register a device token - reuse DB session from dependency
 @router.post("/api/register_device")
 async def register_device(
     device: DeviceRegistration,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """Register a device for push notifications"""
     try:
-        # Register the device token for the user
         user_id = current_user['id']
         
         # Check if device already exists
@@ -193,11 +217,21 @@ async def register_device(
             new_device = UserDevice(
                 user_id=user_id,
                 device_token=device.device_token,
-                platform=device.platform
+                platform=device.platform,
+                device_name=device.device_name,
+                app_version=device.app_version,
+                updated_at=datetime.utcnow()
             )
             db.add(new_device)
-            db.commit()
-            logger.info(f"Registered new device for user {user_id}")
+        else:
+            # Update existing device info
+            existing_device.platform = device.platform
+            existing_device.device_name = device.device_name
+            existing_device.app_version = device.app_version
+            existing_device.updated_at = datetime.utcnow()
+            
+        db.commit()
+        logger.info(f"Device registered for user {user_id}")
             
         return {"message": "Device registered successfully"}
     except Exception as e:
@@ -205,13 +239,13 @@ async def register_device(
         logger.error(f"Error registering device: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Route to verify if a device token is registered - reuse DB session
 @router.post("/api/verify_device_token")
 async def verify_device_token(
     device: DeviceRegistration,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """Verify if a device token is registered"""
     try:
         user_id = current_user['id']
         
@@ -221,24 +255,27 @@ async def verify_device_token(
             UserDevice.device_token == device.device_token
         ).first()
         
-        if not existing_device:
-            return {"registered": False}
-        
-        return {"registered": True}
+        return {"registered": existing_device is not None}
     except Exception as e:
         logger.error(f"Error verifying device token: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Cache for APNS client
-_apns_client = None
-
-# Function to send push notifications - optimized to minimize DB connections
-async def send_push_notification(user_id: str, message: dict):
-    """Send a push notification to a specific user"""
+# Helper context manager for async DB access
+@asynccontextmanager
+async def get_db_context():
+    db = next(get_db())
     try:
-        with next(get_db()) as db:
-            # Get both user and device info in one query - more efficient
-            user_devices_query = db.query(
+        yield db
+    finally:
+        db.close()
+
+# Push notification functions
+async def send_push_notification(user_id: str, message: dict) -> bool:
+    """Send push notifications to all devices of a user"""
+    try:
+        async with get_db_context() as db:
+            # Get both user and device info in one query
+            user_devices = db.query(
                 User.notifications,
                 UserDevice.device_token,
                 UserDevice.platform
@@ -246,34 +283,43 @@ async def send_push_notification(user_id: str, message: dict):
                 UserDevice, User.id == UserDevice.user_id
             ).filter(
                 User.id == user_id
-            )
-            
-            user_devices = user_devices_query.all()
+            ).all()
             
             if not user_devices:
-                logger.info(f"No registered devices or user {user_id} not found")
-                return
+                logger.info(f"No registered devices for user {user_id}")
+                return False
             
-            # Check if notifications are enabled (first result)
+            # Check if notifications are enabled
             if not user_devices[0][0]:  # notifications flag
                 logger.info(f"User {user_id} has disabled notifications")
-                return
+                return False
             
-            print(user_devices)
+            # Track sent notifications
+            success_count = 0
+            
             # Send to all user devices
             for _, device_token, platform in user_devices:
                 try:
                     if platform.lower() == 'android':
-                        await send_fcm_notification(device_token, message)
+                        result = await send_fcm_notification(device_token, message)
                     elif platform.lower() == 'ios':
-                        await send_apns_notification(device_token, message)
+                        result = await send_apns_notification(device_token, message)
+                    else:
+                        logger.warning(f"Unknown platform {platform} for device {device_token}")
+                        continue
+                        
+                    if result:
+                        success_count += 1
                 except Exception as device_error:
-                    logger.error(f"Error sending notification to device {device_token}: {str(device_error)}")
+                    logger.error(f"Error sending to device {device_token}: {str(device_error)}")
+            
+            return success_count > 0
     except Exception as e:
         logger.error(f"Error in send_push_notification for user {user_id}: {str(e)}")
+        return False
 
-async def send_push_notification_if_needed(user_id: str, message: dict):
-    """Send push notifications only if necessary"""
+async def send_push_notification_if_needed(user_id: str, message: dict) -> bool:
+    """Send push notifications only if the user is not connected via WebSocket"""
     try:
         # First check if the user is connected - if connected, don't send push
         if connection_manager.is_connected(user_id):
@@ -281,112 +327,125 @@ async def send_push_notification_if_needed(user_id: str, message: dict):
             return False
         
         # Send the notification with the full message
-        await send_push_notification(user_id, message)
-        return True
+        return await send_push_notification(user_id, message)
     except Exception as e:
-        logger.error(f"Error in send_push_notification_if_needed for user {user_id}: {str(e)}")
+        logger.error(f"Error in send_push_notification_if_needed: {str(e)}")
         return False
 
-# Send FCM notification (Firebase Cloud Messaging) for Android
-async def send_fcm_notification(token: str, message: dict):
+async def send_fcm_notification(token: str, message: dict) -> bool:
+    """Send Firebase Cloud Messaging notification for Android"""
     try:
-        print('========================================')
-        url = "https://fcm.googleapis.com/fcm/send"
-        headers = {
-            "Authorization": f"key={FIREBASE_SERVER_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        # Prepare payload with the entire message content
-        payload = {
-            "to": token,
-            "notification": {
-                "sound": "default",
-                "badge": 1,  # Increment badge count
-                "channelId": "default",
-                "content": message  # Include entire message content directly
-            },
-            "priority": "high",
-            "data": message  # Include the full message as data for app processing
-        }
-        
-        # Set a timeout for the HTTP request
-        timeout = httpx.Timeout(10.0, connect=5.0)
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            try:
+        # Use Firebase Admin SDK for more reliable delivery
+        try:
+            # First try the Firebase Admin SDK
+            android_config = messaging.AndroidConfig(
+                priority="high",
+                notification=messaging.AndroidNotification(
+                    sound="default",
+                    channel_id="default"
+                )
+            )
+            
+            # Prepare the message
+            fcm_message = messaging.Message(
+                data=message,
+                token=token,
+                android=android_config,
+                notification=messaging.Notification(
+                    title=message.get("title", "New notification"),
+                    body=message.get("body", "You have a new notification")
+                )
+            )
+            
+            # Send the message
+            response = messaging.send(fcm_message)
+            logger.info(f"FCM notification sent: {response}")
+            return True
+        except Exception as admin_error:
+            # Fall back to HTTP API if Admin SDK fails
+            logger.warning(f"Firebase Admin SDK failed, falling back to HTTP API: {str(admin_error)}")
+            
+            # Use HTTP API as fallback
+            url = f"https://fcm.googleapis.com/v1/projects/{PROJECT_ID}/messages:send"
+            headers = {
+                "Authorization": f"Bearer {FIREBASE_SERVER_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            # Prepare payload with the entire message content
+            payload = {
+                "message": {
+                    "token": token,
+                    "notification": {
+                        "title": message.get("title", "New notification"),
+                        "body": message.get("body", "You have a new notification")
+                    },
+                    "android": {
+                        "priority": "high",
+                        "notification": {
+                            "sound": "default",
+                            "channel_id": "default"
+                        }
+                    },
+                    "data": message  # Include the full message as data
+                }
+            }
+            
+            # Set a timeout for the HTTP request
+            timeout = httpx.Timeout(10.0, connect=5.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
-                logger.info(f"FCM notification sent: {response.text}")
+                logger.info(f"FCM HTTP API notification sent: {response.text}")
                 return True
-            except httpx.HTTPStatusError as e:
-                logger.error(f"FCM HTTP error: {e.response.status_code} - {e.response.text}")
-                return False
-            except httpx.RequestError as e:
-                logger.error(f"FCM request failed: {str(e)}")
-                return False
+    except httpx.HTTPStatusError as e:
+        logger.error(f"FCM HTTP error: {e.response.status_code} - {e.response.text}")
+        return False
     except Exception as e:
-        logger.error(f"Error sending FCM: {e}")
+        logger.error(f"Error sending FCM notification: {str(e)}")
         return False
 
-async def initialize_apns_client():
-    """Initialize and return an APNS client - with caching."""
-    global _apns_client
-    
-    if _apns_client is not None:
-        return _apns_client
-        
+async def send_apns_notification(token: str, message: dict) -> bool:
+    """Send an iOS push notification via APNS"""
     try:
-        _apns_client = APNs(
-            key_path=APNS_KEY_PATH,
-            key_id=APNS_KEY_ID,
-            team_id=APNS_TEAM_ID,
-            bundle_id=APNS_BUNDLE_ID,
-            use_sandbox=USE_SANDBOX
-        )
-        return _apns_client
-    except Exception as e:
-        logger.error(f"Error initializing APNS client: {e}")
-        raise
-
-async def send_apns_notification(token: str, message: dict):
-    """
-    Send an iOS push notification via APNS with WhatsApp-like features
-    """
-    try:
-        # Create base payload with the message content
+        # Create payload with the message content
         payload = {
             "aps": {
-                "content-available": 1,  # Silent notification to allow app processing
+                "content-available": 1,
                 "sound": "default",
                 "badge": 1,
-                "mutable-content": 1  # Allow app to modify notification content
+                "mutable-content": 1,
+                "alert": {
+                    "title": message.get("title", "New notification"),
+                    "body": message.get("body", "You have a new notification")
+                }
             }
         }
         
-        # Configure WhatsApp-like notification grouping
+        # Configure notification grouping
         if "conversation_id" in message:
-            payload["aps"]["thread-id"] = message["conversation_id"]  # Group by conversation
+            payload["aps"]["thread-id"] = message["conversation_id"]
         
         # Include the entire message in the payload
         for key, value in message.items():
             if key != "aps":  # Don't overwrite the aps dictionary
                 payload[key] = value
         
-        # Initialize APNS client only once (cached)
-        apns_client = await initialize_apns_client()
-        
-        # Create notification request
-        notification = NotificationRequest(
-            device_token=token,
-            message=payload,
-            push_type=PushType.ALERT
-        )
-        
-        # Send notification with timeout
+        # Get the APNS client
         try:
+            apns_client = await apns_manager.get_client()
+            
+            # Create notification request
+            notification = NotificationRequest(
+                device_token=token,
+                message=payload,
+                push_type=PushType.ALERT
+            )
+            
+            # Send notification with timeout
             response = await asyncio.wait_for(
                 apns_client.send_notification(notification),
-                timeout=10.0  # 10 seconds timeout
+                timeout=10.0
             )
             
             # Check response
@@ -394,7 +453,7 @@ async def send_apns_notification(token: str, message: dict):
                 logger.info(f"APNS notification sent successfully to {token}")
                 return True
             else:
-                logger.error(f"APNS send failed: {response.description}")
+                logger.error(f"APNS send failed: {getattr(response, 'description', 'Unknown error')}")
                 return False
         except asyncio.TimeoutError:
             logger.error(f"APNS request timed out for token {token}")
@@ -407,50 +466,64 @@ async def send_apns_notification(token: str, message: dict):
         logger.error(f"Error sending APNS notification: {e}")
         return False
 
-async def notify_users(message: dict, roles: List[str] = None, user_ids: List[str] = None, exclude_ids: List[str] = None):
+async def notify_users(
+    message: dict, 
+    roles: List[str] = None, 
+    user_ids: List[str] = None, 
+    exclude_ids: List[str] = None
+) -> Dict[str, Any]:
     """
-    Notify users with smart delivery - WebSocket for online users, push for offline users
+    Smart notification delivery system - WebSocket for online users, push for offline
     """
     try:
         # Single DB connection for user retrieval
-        with next(get_db()) as db:
-            target_user_ids = []
+        async with get_db_context() as db:
+            target_user_ids = set()
             
+            # Get users by role if specified
             if roles:
                 # Query only users with notifications enabled
                 query = db.query(User.id).filter(User.notifications == True)
                 
-                # Apply role filter
-                if roles:
-                    query = query.filter(func.lower(User.role).in_([r.lower() for r in roles]))                
-
-                # Convert to list of string IDs
-                target_user_ids = [str(u.id) for u in query.all()]
+                # Apply role filter (case-insensitive)
+                query = query.filter(func.lower(User.role).in_([r.lower() for r in roles]))
+                
+                # Add to target set
+                for user in query.all():
+                    target_user_ids.add(str(user.id))
         
-        # If specific user_ids were provided, add them to the target list
-        if user_ids:
-            target_user_ids.extend([str(uid) for uid in user_ids])
+            # Add specific user IDs if provided
+            if user_ids:
+                for uid in user_ids:
+                    target_user_ids.add(str(uid))
         
-        # Remove excluded IDs
-        if exclude_ids:
-            target_user_ids = [uid for uid in target_user_ids if uid not in exclude_ids]
+            # Remove excluded IDs
+            if exclude_ids:
+                target_user_ids = {uid for uid in target_user_ids if uid not in exclude_ids}
+        
+        # Convert to list for processing
+        target_user_ids = list(target_user_ids)
+        if not target_user_ids:
+            logger.warning("No target users found for notification")
+            return {"websocket_sent": 0, "push_sent": 0, "total_users": 0}
         
         # First try WebSocket delivery for connected users
         delivery_results = await connection_manager.broadcast(
             message=message,
-            user_ids=target_user_ids if target_user_ids else None
+            user_ids=target_user_ids
         )
         
         # Track notification results
         results = {
             "websocket_sent": 0,
             "push_sent": 0,
-            "total_users": len(target_user_ids)
+            "total_users": len(target_user_ids),
+            "failed": 0
         }
         
         # Process results in batches to prevent too many concurrent tasks
         batch_size = 10
-        print(target_user_ids)
+        
         for i in range(0, len(target_user_ids), batch_size):
             batch_user_ids = target_user_ids[i:i+batch_size]
             batch_tasks = []
@@ -461,8 +534,9 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
                     results["websocket_sent"] += 1
                 else:
                     # Queue push notification task
-                    task = asyncio.create_task(send_push_notification_if_needed(user_id, message))
-                    batch_tasks.append((user_id, task))
+                    batch_tasks.append((user_id, asyncio.create_task(
+                        send_push_notification_if_needed(user_id, message)
+                    )))
             
             # Wait for batch completion
             if batch_tasks:
@@ -471,21 +545,24 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
                         push_sent = await asyncio.wait_for(task, timeout=15.0)
                         if push_sent:
                             results["push_sent"] += 1
+                        else:
+                            results["failed"] += 1
                     except asyncio.TimeoutError:
                         logger.error(f"Push notification timed out for user {user_id}")
+                        results["failed"] += 1
                     except Exception as e:
                         logger.error(f"Error sending push to user {user_id}: {str(e)}")
+                        results["failed"] += 1
         
         return results
     except Exception as e:
         logger.error(f"Error in notify_users: {str(e)}")
-        return {"error": str(e), "websocket_sent": 0, "push_sent": 0, "total_users": 0}
+        return {"error": str(e), "websocket_sent": 0, "push_sent": 0, "total_users": 0, "failed": 0}
 
-# Helper function for legacy code compatibility
-def get_livreurs():
+def get_livreurs() -> Dict[str, Any]:
     """
     Returns a dictionary of connected delivery drivers
-    Compatible with old format for existing integrations
+    Compatible with legacy format for existing integrations
     """
     try:
         result = {}
