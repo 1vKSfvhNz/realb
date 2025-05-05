@@ -277,15 +277,14 @@ async def send_push_notification(user_id: str, message: dict) -> bool:
         async with get_db_context() as db:
             # Get both user and device info in one query
             user_devices = db.query(
-                User.notifications,
                 UserDevice.device_token,
                 UserDevice.platform
-            ).join(
-                UserDevice, User.id == UserDevice.user_id
             ).filter(
-                User.id == user_id
+                UserDevice.user_id == int(user_id)
             ).all()
             
+            print(user_id)
+            print(user_devices)
             if not user_devices:
                 logger.info(f"No registered devices for user {user_id}")
                 return False
@@ -373,6 +372,7 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
         logger.error(f"Error sending FCM notification: {str(e)}")
         return False
 
+# No registered devices for user
 async def send_apns_notification(token: str, message: dict) -> bool:
     """Send an iOS push notification via APNS"""
     try:
