@@ -36,8 +36,8 @@ if not firebase_admin._apps:
     try:
         cred_path = getenv("GOOGLE_APPLICATION_CREDENTIALS")
         firebase_dict = json.loads(cred_path)
-        if cred_path:
-            cred = credentials.Certificate(cred_path)
+        if firebase_dict:
+            cred = credentials.Certificate(firebase_dict)
             firebase_admin.initialize_app(cred)
             logger.info("Firebase initialized successfully")
         else:
