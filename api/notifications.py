@@ -94,6 +94,7 @@ async def update_notification_preference(
 
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
+    await websocket.accept()
     user_id = None
     try:
         token = websocket.query_params.get("token")
