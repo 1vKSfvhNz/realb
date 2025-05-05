@@ -259,6 +259,8 @@ async def send_push_notification(user_id: str, title: str, body: str, data: dict
                 logger.info(f"User {user_id} has disabled notifications")
                 return
             
+            print(user_devices)
+            print('+++++++++++++++++++++++++++++++++++++++++++++++++')
             # Send to all user devices
             for _, device_token, platform in user_devices:
                 try:
@@ -279,10 +281,11 @@ async def send_push_notification_if_needed(user_id: str, message: dict):
             logger.info(f"User {user_id} is connected, skipping push notification")
             return False
         
+        print('++++++++++++++++++++++++++++++++++++++++++++++send_push_notification+++++++++++++++++++++++12')
         # Check if required fields are present
         if "title" in message and "body" in message:
             # Send the notification
-            print('++++++++++++++++++++++++++++++++++++++++++++++')
+            print('++++++++++++++++++++++++++++++++++++++++++++++send_push_notification+++++++++++++++++++++++')
             await send_push_notification(
                 user_id, 
                 message["title"], 
