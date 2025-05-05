@@ -76,13 +76,9 @@ async def create_order(
         # ✅ Notification aux livreurs connectés
         await notify_users( 
             message={
-                "title": "new_order",
-                "body": f"{new_order.id}",
-                "data": {
-                    "type": "new_order",
-                    "command_id": new_order.id,
-                    "user": user.username
-                }
+                "type": "new_order",
+                "command_id": new_order.id,
+                "user": user.username
             },
             roles=["deliver", "admin"],  # Notifier tous les livreurs et admins
             # exclude_ids=[user.id]

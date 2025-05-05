@@ -233,7 +233,7 @@ async def verify_device_token(
 _apns_client = None
 
 # Function to send push notifications - optimized to minimize DB connections
-async def send_push_notification(user_id: str, title: str, body: str, data: dict = None):
+async def send_push_notification(user_id: str, message: dict):
     """Send a push notification to a specific user"""
     try:
         with next(get_db()) as db:
@@ -264,9 +264,9 @@ async def send_push_notification(user_id: str, title: str, body: str, data: dict
             for _, device_token, platform in user_devices:
                 try:
                     if platform.lower() == 'android':
-                        await send_fcm_notification(device_token, title, body, data)
+                        await send_fcm_notification(device_token, message)
                     elif platform.lower() == 'ios':
-                        await send_apns_notification(device_token, title, body, data)
+                        await send_apns_notification(device_token, message)
                 except Exception as device_error:
                     logger.error(f"Error sending notification to device {device_token}: {str(device_error)}")
     except Exception as e:
@@ -280,25 +280,15 @@ async def send_push_notification_if_needed(user_id: str, message: dict):
             logger.info(f"User {user_id} is connected, skipping push notification")
             return False
         
-        print(message)
-        # Check if required fields are present
-        if "title" in message and "body" in message:
-            # Send the notification
-            await send_push_notification(
-                user_id, 
-                message["title"], 
-                message["body"], 
-                data=message.get("data", {})
-            )
-            return True
-        
-        return False
+        # Send the notification with the full message
+        await send_push_notification(user_id, message)
+        return True
     except Exception as e:
         logger.error(f"Error in send_push_notification_if_needed for user {user_id}: {str(e)}")
         return False
 
 # Send FCM notification (Firebase Cloud Messaging) for Android
-async def send_fcm_notification(token: str, title: str, body: str, data: dict = None):
+async def send_fcm_notification(token: str, message: dict):
     try:
         print('========================================')
         url = "https://fcm.googleapis.com/fcm/send"
@@ -307,33 +297,19 @@ async def send_fcm_notification(token: str, title: str, body: str, data: dict = 
             "Content-Type": "application/json"
         }
         
-        # Prepare basic payload
+        # Prepare payload with the entire message content
         payload = {
             "to": token,
             "notification": {
-                "title": title,
-                "body": body,
                 "sound": "default",
                 "badge": 1,  # Increment badge count
-                "channelId": "default"
+                "channelId": "default",
+                "content": message  # Include entire message content directly
             },
-            "priority": "high"
+            "priority": "high",
+            "data": message  # Include the full message as data for app processing
         }
         
-        # Add data payload for the app to process
-        if data:
-            # Add conversation ID for grouping
-            if "conversation_id" in data:
-                payload["android"] = {
-                    "notification": {
-                        "tag": data["conversation_id"],  # Group by conversation
-                        "color": "#25D366"
-                    }
-                }
-            
-            # Add data for app processing
-            payload["data"] = data
-            
         # Set a timeout for the HTTP request
         timeout = httpx.Timeout(10.0, connect=5.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -372,18 +348,15 @@ async def initialize_apns_client():
         logger.error(f"Error initializing APNS client: {e}")
         raise
 
-async def send_apns_notification(token: str, title: str, body: str, data: dict = None):
+async def send_apns_notification(token: str, message: dict):
     """
     Send an iOS push notification via APNS with WhatsApp-like features
     """
     try:
-        # Create base payload with basic alert
+        # Create base payload with the message content
         payload = {
             "aps": {
-                "alert": {
-                    "title": title,
-                    "body": body
-                },
+                "content-available": 1,  # Silent notification to allow app processing
                 "sound": "default",
                 "badge": 1,
                 "mutable-content": 1  # Allow app to modify notification content
@@ -391,14 +364,13 @@ async def send_apns_notification(token: str, title: str, body: str, data: dict =
         }
         
         # Configure WhatsApp-like notification grouping
-        if data and "conversation_id" in data:
-            payload["aps"]["thread-id"] = data["conversation_id"]  # Group by conversation
+        if "conversation_id" in message:
+            payload["aps"]["thread-id"] = message["conversation_id"]  # Group by conversation
         
-        # Add app-specific data
-        if data:
-            for key, value in data.items():
-                if key != "aps":  # Don't overwrite the aps dictionary
-                    payload[key] = value
+        # Include the entire message in the payload
+        for key, value in message.items():
+            if key != "aps":  # Don't overwrite the aps dictionary
+                payload[key] = value
         
         # Initialize APNS client only once (cached)
         apns_client = await initialize_apns_client()
