@@ -3,7 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from models import User, UserDevice, get_db
 from typing import List, Dict, Any
-import httpx
+import httpx, json
 import logging
 from os import getenv
 from utils.security import get_current_user_from_token, get_current_user
@@ -35,6 +35,7 @@ USE_SANDBOX = getenv("APNS_SANDBOX", "False").lower() == "true"
 if not firebase_admin._apps:
     try:
         cred_path = getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        firebase_dict = json.loads(cred_path)
         if cred_path:
             cred = credentials.Certificate(cred_path)
             firebase_admin.initialize_app(cred)
