@@ -365,40 +365,7 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
         except Exception as admin_error:
             # Fall back to HTTP API if Admin SDK fails
             logger.warning(f"Firebase Admin SDK failed, falling back to HTTP API: {str(admin_error)}")
-            
-            # Use HTTP API as fallback
-            url = f"https://fcm.googleapis.com/v1/projects/{PROJECT_ID}/messages:send"
-            headers = {
-                "Authorization": f"Bearer {FIREBASE_SERVER_KEY}",
-                "Content-Type": "application/json"
-            }
-            
-            # Prepare payload with the entire message content
-            payload = {
-                "message": {
-                    "token": token,
-                    "notification": {
-                        "title": message.get("title", "New notification"),
-                        "body": message.get("body", "You have a new notification")
-                    },
-                    "android": {
-                        "priority": "high",
-                        "notification": {
-                            "sound": "default",
-                            "channel_id": "default"
-                        }
-                    },
-                    "data": message  # Include the full message as data
-                }
-            }
-            
-            # Set a timeout for the HTTP request
-            timeout = httpx.Timeout(10.0, connect=5.0)
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(url, json=payload, headers=headers)
-                response.raise_for_status()
-                logger.info(f"FCM HTTP API notification sent: {response.text}")
-                return True
+            return False        
     except httpx.HTTPStatusError as e:
         logger.error(f"FCM HTTP error: {e.response.status_code} - {e.response.text}")
         return False

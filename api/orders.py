@@ -77,7 +77,7 @@ async def create_order(
         await notify_users( 
             message={
                 "type": "new_order",
-                "command_id": new_order.id,
+                "command_id": str(new_order.id),
                 "username": user.username
             },
             roles=["deliver", "admin"],  # Notifier tous les livreurs et admins
@@ -313,7 +313,7 @@ async def update_order_status(
             await notify_users(
                 message={
                     "type": "order_status_update",
-                    "order_id": id,
+                    "order_id": str(id),
                     "status": "delivering",
                     "message": user.username
                 },
@@ -327,7 +327,7 @@ async def update_order_status(
             await notify_users(
                 message={
                     "type": "order_status_update",
-                    "order_id": id,
+                    "order_id": str(id),
                     "status": "delivered",
                 },
                 user_ids=[str(order.customer_id)]
