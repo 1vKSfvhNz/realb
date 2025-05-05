@@ -42,6 +42,8 @@ class NotificationPreference(BaseModel):
 class DeviceRegistration(BaseModel):
     device_token: str
     platform: str
+    app_version: str
+    device_name: str
 
 # Pydantic model for read receipts
 class ReadReceipt(BaseModel):
@@ -95,7 +97,6 @@ async def update_notification_preference(
 @router.websocket("/ws/notifications")
 async def websocket_notifications(websocket: WebSocket):
     await websocket.accept()
-    user_id = None
     try:
         token = websocket.query_params.get("token")
         if not token:
@@ -157,23 +158,7 @@ async def websocket_notifications(websocket: WebSocket):
             username = conn["metadata"].get("username") if conn else None
             
             # Disconnect user
-            connection_manager.disconnect(user_id)
-                        
-            # Broadcast offline status to contacts
-            if username:
-                contacts = []  # Replace with actual contacts retrieval
-                
-                if contacts:
-                    await connection_manager.broadcast(
-                        message={
-                            "type": "user_status_change",
-                            "user_id": user_id,
-                            "username": username,
-                            "status": "offline",
-                            "last_seen": datetime.now().isoformat()
-                        },
-                        user_ids=contacts
-                    )
+            connection_manager.disconnect(user_id)                        
     except Exception as e:
         logger.error(f"❌ WebSocket error: {str(e)}")
         try:
@@ -273,9 +258,6 @@ async def send_push_notification(user_id: str, title: str, body: str, data: dict
             if not user_devices[0][0]:  # notifications flag
                 logger.info(f"User {user_id} has disabled notifications")
                 return
-            
-            # Check if conversation is muted (if applicable)
-            conversation_id = data.get("conversation_id") if data else None
             
             # Send to all user devices
             for _, device_token, platform in user_devices:
@@ -493,6 +475,7 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
         
         # Process results in batches to prevent too many concurrent tasks
         batch_size = 10
+        print(len(target_user_ids))
         for i in range(0, len(target_user_ids), batch_size):
             batch_user_ids = target_user_ids[i:i+batch_size]
             batch_tasks = []
@@ -503,6 +486,7 @@ async def notify_users(message: dict, roles: List[str] = None, user_ids: List[st
                     results["websocket_sent"] += 1
                 else:
                     # Queue push notification task
+                    print('============================================')
                     task = asyncio.create_task(send_push_notification_if_needed(user_id, message))
                     batch_tasks.append((user_id, task))
             

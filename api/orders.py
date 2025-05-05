@@ -73,7 +73,6 @@ async def create_order(
         # Calcul des variables ML
         new_order.calculate_ml_features(db)
 
-        print('++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
         # ✅ Notification aux livreurs connectés
         await notify_users(
             message={
@@ -84,7 +83,6 @@ async def create_order(
             roles=["deliver", "admin"],  # Notifier tous les livreurs et admins
             # exclude_ids=[user.id]
         )
-        print('---------------------------------------------------------------------')
         return {"message": "Commande créée", "order_id": new_order.id}
     except Exception as e:
         db.rollback()

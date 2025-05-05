@@ -1,12 +1,13 @@
+from os import getenv
+import time
+import asyncio
+import pickle
 from fastapi import WebSocket
 from models import SessionLocal, UserConnection
 from typing import Dict, List, Optional, Any
 import json
 import logging
-from os import getenv
-import time
-import asyncio
-import pickle
+from starlette.websockets import WebSocketState
 from datetime import datetime, timedelta
 from redis import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -192,20 +193,26 @@ class ConnectionManager:
     
     async def send_message(self, user_id: str, message: dict) -> bool:
         """
-        Send a message to a specific user
-        Returns True if sent successfully, False otherwise
+        Send a message to a specific user.
+        Returns True if sent successfully, False otherwise.
         """
         conn = self.active_connections.get(user_id)
         if not conn:
             logger.debug(f"⚠️ Cannot send message to disconnected user {user_id}")
             return False
-            
+
+        websocket = conn["ws"]
+        
+        if websocket.application_state != WebSocketState.CONNECTED:
+            logger.warning(f"⚠️ WebSocket for user {user_id} is not connected (state: {websocket.application_state})")
+            self.disconnect(user_id)
+            return False
+
         try:
-            await conn["ws"].send_json(message)
+            await websocket.send_json(message)
             return True
         except Exception as e:
             logger.error(f"❌ Failed to send message to user {user_id}: {e}")
-            # Connection is dead, remove it
             self.disconnect(user_id)
             return False
     
