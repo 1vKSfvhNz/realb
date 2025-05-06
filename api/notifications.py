@@ -283,8 +283,6 @@ async def send_push_notification(user_id: str, message: dict) -> bool:
                 UserDevice.user_id == int(user_id)
             ).all()
             
-            print('==========================================================')
-            print(user_id)
             print(user_devices)
             if not user_devices:
                 logger.info(f"No registered devices for user {user_id}")
@@ -299,7 +297,7 @@ async def send_push_notification(user_id: str, message: dict) -> bool:
             success_count = 0
             
             # Send to all user devices
-            for _, device_token, platform in user_devices:
+            for device_token, platform in user_devices:
                 try:
                     if platform.lower() == 'android':
                         result = await send_fcm_notification(device_token, message)
