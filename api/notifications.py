@@ -283,6 +283,7 @@ async def send_push_notification(user_id: str, message: dict) -> bool:
                 UserDevice.user_id == int(user_id)
             ).all()
             
+            print('==========================================================')
             print(user_id)
             print(user_devices)
             if not user_devices:
