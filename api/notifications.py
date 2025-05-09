@@ -495,6 +495,7 @@ async def notify_users(
             return {"websocket_sent": 0, "push_sent": 0, "total_users": 0}
         
         # First try WebSocket delivery for connected users
+        print(f'======================{target_user_ids}===================')
         delivery_results = await connection_manager.broadcast(
             message=message,
             user_ids=target_user_ids
