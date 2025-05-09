@@ -243,11 +243,13 @@ class ConnectionManager:
             exclude_set = set([str(uid) for uid in exclude_ids])  # Ensure all IDs are strings
             target_users = target_users - exclude_set
         
+        print(f'======================{target_users}===================')
         # Send messages and collect success/failure
         for user_id in target_users:
             success = await self.send_message(user_id, message)
             results[user_id] = success
             
+        print(f'======================{results}===================')
         return results
     
     def save_connection_metadata(self, user_id: str, metadata: dict):
