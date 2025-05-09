@@ -34,16 +34,37 @@ USE_SANDBOX = getenv("APNS_SANDBOX", "False").lower() == "true"
 # Initialize Firebase - only if not already initialized
 if not firebase_admin._apps:
     try:
+        # Obtention des informations d'identification Firebase
         cred_path = getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        firebase_dict = json.loads(cred_path)
-        if firebase_dict:
-            cred = credentials.Certificate(firebase_dict)
-            firebase_admin.initialize_app(cred)
-            logger.info("Firebase initialized successfully")
+        
+        # Vérifier si la variable contient un chemin de fichier ou directement un JSON
+        if cred_path and (cred_path.endswith('.json') or '/' in cred_path):
+            # C'est un chemin de fichier
+            try:
+                cred = credentials.Certificate(cred_path)
+                firebase_admin.initialize_app(cred)
+                logger.info("Firebase initialized successfully from file path")
+            except Exception as file_err:
+                logger.error(f"Failed to initialize Firebase from file: {str(file_err)}")
         else:
-            logger.error("GOOGLE_APPLICATION_CREDENTIALS not set")
+            # C'est probablement une chaîne JSON
+            try:
+                firebase_dict = json.loads(cred_path) if cred_path else None
+                if firebase_dict:
+                    cred = credentials.Certificate(firebase_dict)
+                    firebase_admin.initialize_app(cred)
+                    logger.info("Firebase initialized successfully from JSON string")
+                else:
+                    # Essayer d'initialiser sans authentification (pour les émulateurs)
+                    firebase_admin.initialize_app()
+                    logger.warning("Firebase initialized without credentials")
+            except json.JSONDecodeError:
+                logger.error("GOOGLE_APPLICATION_CREDENTIALS is neither a valid file path nor a valid JSON")
+            except Exception as json_err:
+                logger.error(f"Failed to initialize Firebase from JSON: {str(json_err)}")
     except Exception as e:
         logger.error(f"Failed to initialize Firebase: {str(e)}")
+
 
 # Router for our endpoints
 router = APIRouter()
