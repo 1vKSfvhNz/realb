@@ -73,12 +73,15 @@ class User(Base):
 
 class UserDevice(Base):
     __tablename__ = "user_devices"
+
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    device_token = Column(String)
-    platform = Column(String)  # 'ios' ou 'android'
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    app_version = Column(String, nullable=True)     # version de l'app installée
+    device_name = Column(String, nullable=True)     # nom du périphérique (ex: iPhone 12)
+    device_token = Column(String, nullable=False)    # FCM/APNs token
+    platform = Column(String, nullable=False)       # 'ios' ou 'android'
     last_used_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    
+
     # Relation avec l'utilisateur
     user = relationship("User", back_populates="devices")
 

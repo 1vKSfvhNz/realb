@@ -217,19 +217,18 @@ async def register_device(
             # Create a new device
             new_device = UserDevice(
                 user_id=user_id,
-                device_token=device.device_token,
-                platform=device.platform,
-                device_name=device.device_name,
                 app_version=device.app_version,
-                updated_at=datetime.utcnow()
+                device_name=device.device_name,
+                platform=device.platform,
+                device_token=device.device_token,
             )
             db.add(new_device)
         else:
             # Update existing device info
-            existing_device.platform = device.platform
-            existing_device.device_name = device.device_name
             existing_device.app_version = device.app_version
-            existing_device.updated_at = datetime.utcnow()
+            existing_device.device_name = device.device_name
+            existing_device.platform = device.platform
+            existing_device.device_token = device.device_token
             
         db.commit()
         logger.info(f"Device registered for user {user_id}")
@@ -283,7 +282,7 @@ async def send_push_notification(user_id: str, message: dict) -> bool:
                 UserDevice.user_id == int(user_id)
             ).all()
             
-            print(user_devices)
+            print(user_id, '** : **', user_devices)
             if not user_devices:
                 logger.info(f"No registered devices for user {user_id}")
                 return False
