@@ -209,6 +209,8 @@ class ConnectionManager:
             return False
 
         try:
+            from time import sleep
+            sleep(5)
             await websocket.send_json(message)
             return True
         except Exception as e:
@@ -243,7 +245,6 @@ class ConnectionManager:
             exclude_set = set([str(uid) for uid in exclude_ids])  # Ensure all IDs are strings
             target_users = target_users - exclude_set
         
-        print(f'======================{target_users}===================')
         # Send messages and collect success/failure
         for user_id in target_users:
             success = await self.send_message(user_id, message)
