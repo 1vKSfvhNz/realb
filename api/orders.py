@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from geopy.distance import geodesic
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, joinedload
@@ -81,7 +81,7 @@ async def create_order(
                 "username": user.username
             },
             roles=["deliver", "admin"],  # Notifier tous les livreurs et admins
-            # exclude_ids=[user.id]
+            user_ids=[user.id]
         )
 
         return {"message": "Commande créée", "order_id": new_order.id}
