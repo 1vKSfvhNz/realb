@@ -451,6 +451,7 @@ async def notify_users(
         logger.error(f"Error in notify_users: {str(e)}")
         return {"error": str(e), "websocket_sent": 0, "push_sent": 0, "total_users": 0, "failed": 0}
 
+# broadcast
 def get_livreurs() -> Dict[str, Any]:
     """
     Returns a dictionary of connected delivery drivers
