@@ -207,14 +207,8 @@ async def send_push_notification(user_id: str, message: dict) -> bool:
     try:
         async with get_db_context() as db:
             # Get both user and device info in one query
-            user_devices = db.query(
-                UserDevice.device_token,
-                UserDevice.platform
-            ).filter(
-                UserDevice.user_id == int(user_id)
-            ).all()
+            user_devices = db.query(UserDevice.device_token, UserDevice.platform).filter(UserDevice.user_id == int(user_id)).all()
             
-            print(user_id, '** : **', user_devices)
             if not user_devices:
                 logger.info(f"No registered devices for user {user_id}")
                 return False
