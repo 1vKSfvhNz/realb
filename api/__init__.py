@@ -1,4 +1,4 @@
-from api import (auth, users, products, banners, categories, orders, delivery_location, integrity,
+from api import (auth, users, products, banners, categories, devices, orders, delivery_location, integrity,
                  notifications, ratings, recommendations, localities, devises, train_model, db)
 
 __all__ = [
@@ -9,6 +9,7 @@ __all__ = [
     "categories",
     "orders",
     "db",
+    "devices",
     "delivery_location",
     "notifications",
     "integrity",

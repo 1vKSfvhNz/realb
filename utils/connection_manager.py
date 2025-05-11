@@ -209,8 +209,6 @@ class ConnectionManager:
             return False
 
         try:
-            from time import sleep
-            sleep(5)
             await websocket.send_json(message)
             return True
         except Exception as e:
