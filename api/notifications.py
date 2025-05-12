@@ -272,6 +272,7 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
                     channel_id="orders-channel"
                 )
             )
+            print(android_config)
             
             # Prepare the message
             fcm_message = messaging.Message(
@@ -283,6 +284,7 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
                 #     body=message.get("body", "You have a new notification")
                 # )
             )
+            print(fcm_message)
             
             # Send the message
             response = messaging.send(fcm_message)
