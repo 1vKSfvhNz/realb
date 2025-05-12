@@ -12,7 +12,7 @@ router = APIRouter()
 # Endpoint pour mettre à jour la position du livreur
 @router.post("/update_delivery_location")
 async def update_delivery_location(
-    location: LocationUpdate,
+    location: DeliverLocation,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -22,22 +22,22 @@ async def update_delivery_location(
             raise HTTPException(status_code=403, detail=get_error_key("users", "list", "no_permission"))
         
         # Vérifier si la commande existe
-        order = db.query(Order).filter(Order.id == location.order_id).first()
-        if not order:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=get_error_key("orders", "not_found")
-            )
+        # order = db.query(Order).filter(Order.id == location.order_id).first()
+        # if not order:
+        #     raise HTTPException(
+        #         status_code=status.HTTP_404_NOT_FOUND,
+        #         detail=get_error_key("orders", "not_found")
+        #     )
         
         # Vérifier si l'utilisateur est bien le livreur assigné à cette commande
-        if order.delivery_person_id != current_user.get("id"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=get_error_key("orders", "unauthorized_deliverer")
-            )
+        # if order.delivery_person_id != current_user.get("id"):
+        #     raise HTTPException(
+        #         status_code=status.HTTP_403_FORBIDDEN,
+        #         detail=get_error_key("orders", "unauthorized_deliverer")
+        #     )
         
         # Créer ou mettre à jour l'entrée de position
-        courier_location = db.query(CourierLocation).filter(CourierLocation.order_id == location.order_id).first()
+        courier_location = db.query(CourierLocation).filter(CourierLocation.delivery_person_id == current_user.get("id")).first()
         
         if courier_location:
             # Mettre à jour la position existante
@@ -49,7 +49,7 @@ async def update_delivery_location(
         else:
             # Créer une nouvelle entrée de position
             courier_location = CourierLocation(
-                order_id=location.order_id,
+                # order_id=location.order_id,
                 delivery_person_id=current_user.get("id"),
                 latitude=location.latitude,
                 longitude=location.longitude,
@@ -70,7 +70,7 @@ async def update_delivery_location(
 # Endpoint pour récupérer la position du livreur
 @router.get("/delivery_location/{order_id}", response_model=DeliverLocation)
 async def get_delivery_location(
-    order_id: str,
+    order_id: int,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -91,9 +91,7 @@ async def get_delivery_location(
             )
         
         # Récupérer la position la plus récente
-        courier_location = db.query(CourierLocation).filter(
-            CourierLocation.order_id == order_id
-        ).order_by(CourierLocation.updated_at.desc()).first()
+        courier_location = db.query(CourierLocation).filter(CourierLocation.delivery_person_id == order.customer_id).order_by(CourierLocation.updated_at.desc()).first()
         
         if not courier_location:
             raise HTTPException(

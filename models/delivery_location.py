@@ -10,7 +10,7 @@ class CourierLocation(Base):
     __tablename__ = "courier_locations"
     
     id = Column(Integer, primary_key=True, index=True)
-    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
+    # order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
     delivery_person_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     
     # Coordonnées géographiques
@@ -27,7 +27,7 @@ class CourierLocation(Base):
                       onupdate=lambda: datetime.now(timezone.utc))
     
     # Relations
-    order = relationship("Order", back_populates="locations")
+    # order = relationship("Order", back_populates="locations")
     delivery_person = relationship("User", back_populates="locations")
     
     def __repr__(self):
