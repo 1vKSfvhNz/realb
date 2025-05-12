@@ -279,12 +279,7 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
                 data=message,
                 token=token,
                 android=android_config,
-                # notification=messaging.Notification(
-                #     title=message.get("title", "New notification"),
-                #     body=message.get("body", "You have a new notification")
-                # )
             )
-            print(fcm_message)
             
             # Send the message
             response = messaging.send(fcm_message)

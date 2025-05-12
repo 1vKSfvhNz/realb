@@ -81,7 +81,6 @@ async def create_order(
                 "username": user.username
             },
             roles=["deliver", "admin"],  # Notifier tous les livreurs et admins
-            exclude_ids=['2', '3', '4', '5']
         )
 
         return {"message": "Commande créée", "order_id": new_order.id}
@@ -115,6 +114,7 @@ async def list_orders(
                     ),
                 )
             )
+            .order_by(Order.updated_at.asc())  # Tri du plus ancien au plus récent
             .all()
         )
 
@@ -204,6 +204,7 @@ async def list_orders_by_deliverman(
                     )
                 )
             )
+            .order_by(Order.updated_at.asc())  # Tri du plus ancien au plus récent
             .all()
         )    
 
@@ -315,7 +316,7 @@ async def update_order_status(
                     "type": "order_status_update",
                     "order_id": str(id),
                     "status": "delivering",
-                    "message": user.username
+                    "deliver": user.username
                 },
                 user_ids=[str(order.customer_id)]
             )
