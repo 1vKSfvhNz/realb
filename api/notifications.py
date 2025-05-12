@@ -263,11 +263,13 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
         # Use Firebase Admin SDK for more reliable delivery
         try:
             # First try the Firebase Admin SDK
+            print(message)
+
             android_config = messaging.AndroidConfig(
                 priority="high",
                 notification=messaging.AndroidNotification(
                     sound="default",
-                    channel_id="default"
+                    channel_id="orders-channel"
                 )
             )
             
