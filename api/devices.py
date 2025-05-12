@@ -34,6 +34,9 @@ async def register_device(
             UserDevice.user_id == user_id,
             UserDevice.device_token == device.device_token
         ).first()
+
+        print(user_id)
+        print(device.device_token)
         
         if not existing_device:
             # Create a new device
