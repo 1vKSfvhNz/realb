@@ -425,14 +425,14 @@ async def notify_users(
             batch_tasks = []
             
             for user_id in batch_user_ids:
-                delivered = delivery_results.get(user_id, False)
-                if delivered:
-                    results["websocket_sent"] += 1
-                else:
+                # delivered = delivery_results.get(user_id, False)
+                # if delivered:
+                #     results["websocket_sent"] += 1
+                # else:
                     # Queue push notification task
-                    batch_tasks.append((user_id, asyncio.create_task(
-                        send_push_notification_if_needed(user_id, message)
-                    )))
+                batch_tasks.append((user_id, asyncio.create_task(
+                    send_push_notification_if_needed(user_id, message)
+                )))
             
             # Wait for batch completion
             if batch_tasks:
