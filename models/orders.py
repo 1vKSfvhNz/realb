@@ -74,7 +74,6 @@ class Order(Base):
     longitude = Column(Float, nullable=False)
     accuracy = Column(Float, nullable=False)
     delivery_notes = Column(Text, nullable=True)
-    locations = relationship("CourierLocation", back_populates="order")
     
     # Informations temporelles
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
