@@ -203,7 +203,7 @@ async def get_db_context():
 
 # Push notification functions
 async def send_push_notification(user_id: str, message: dict) -> bool:
-    """Send push notifications to all devices of a user"""
+    print("""Send push notifications to all devices of a user""")
     try:
         async with get_db_context() as db:
             # Get both user and device info in one query
@@ -244,7 +244,7 @@ async def send_push_notification(user_id: str, message: dict) -> bool:
         return False
 
 async def send_push_notification_if_needed(user_id: str, message: dict) -> bool:
-    """Send push notifications only if the user is not connected via WebSocket"""
+    print("""Send push notifications only if the user is not connected via WebSocket""")
     try:
         # First check if the user is connected - if connected, don't send push
         if connection_manager.is_connected(user_id):
@@ -258,7 +258,7 @@ async def send_push_notification_if_needed(user_id: str, message: dict) -> bool:
         return False
 
 async def send_fcm_notification(token: str, message: dict) -> bool:
-    """Send Firebase Cloud Messaging notification for Android"""
+    print("""Send Firebase Cloud Messaging notification for Android""")
     try:
         # Use Firebase Admin SDK for more reliable delivery
         try:
@@ -276,10 +276,10 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
                 data=message,
                 token=token,
                 android=android_config,
-                notification=messaging.Notification(
-                    title=message.get("title", "New notification"),
-                    body=message.get("body", "You have a new notification")
-                )
+                # notification=messaging.Notification(
+                #     title=message.get("title", "New notification"),
+                #     body=message.get("body", "You have a new notification")
+                # )
             )
             
             # Send the message
