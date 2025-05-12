@@ -400,14 +400,14 @@ async def notify_users(
             logger.warning("No target users found for notification")
             return {"websocket_sent": 0, "push_sent": 0, "total_users": 0}
         
-        from time import sleep
-        sleep(5)
+        # from time import sleep
+        # sleep(5)
 
-        # First try WebSocket delivery for connected users
-        delivery_results = await connection_manager.broadcast(
-            message=message,
-            user_ids=target_user_ids
-        )
+        # # First try WebSocket delivery for connected users
+        # delivery_results = await connection_manager.broadcast(
+        #     message=message,
+        #     user_ids=target_user_ids
+        # )
         
         # Track notification results
         results = {
