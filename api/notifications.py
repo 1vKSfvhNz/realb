@@ -201,7 +201,7 @@ async def get_db_context():
     finally:
         db.close()
 
-# Push notification functions
+# Push notification functions 
 async def send_push_notification(user_id: str, message: dict) -> bool:
     print("""Send push notifications to all devices of a user""")
     try:
@@ -247,9 +247,9 @@ async def send_push_notification_if_needed(user_id: str, message: dict) -> bool:
     print("""Send push notifications only if the user is not connected via WebSocket""")
     try:
         # First check if the user is connected - if connected, don't send push
-        if connection_manager.is_connected(user_id):
-            logger.info(f"User {user_id} is connected, skipping push notification")
-            return False
+        # if connection_manager.is_connected(user_id):
+        #     logger.info(f"User {user_id} is connected, skipping push notification")
+        #     return False
         
         # Send the notification with the full message
         return await send_push_notification(user_id, message)
