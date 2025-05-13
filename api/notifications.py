@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.orm import Session
-from models import User, UserDevice, get_db
+from models import User, UserDevice, get_db, delete_from_db
 from typing import List, Dict, Any
 import httpx, json
 import logging
@@ -296,14 +296,9 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
 async def delete_token_from_db(token: str):
     try:
         async with get_db_context() as db:
-            device = await db.execute(
-                select(UserDevice).where(UserDevice.device_token == token)
-            )
-            result = device.scalars().first()
-
-            if result:
-                await db.delete(result)
-                await db.commit()
+            device = db.query(UserDevice).filter(UserDevice.device_token == token).first()
+            if device:
+                delete_from_db(device, db)
                 logger.info(f"Token supprimé de la base de données: {token}")
     except Exception as db_error:
         logger.error(f"Erreur lors de la suppression du token: {str(db_error)}")
