@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from models import User, UserDevice, get_db
 from typing import List, Dict, Any
@@ -253,11 +253,9 @@ async def send_push_notification_if_needed(user_id: str, message: dict) -> bool:
         return False
 
 async def send_fcm_notification(token: str, message: dict) -> bool:
-    print("""Send Firebase Cloud Messaging notification for Android""")
+    print("Send Firebase Cloud Messaging notification for Android")
     try:
-        # Use Firebase Admin SDK for more reliable delivery
         try:
-            # First try the Firebase Admin SDK
             print(message)
 
             android_config = messaging.AndroidConfig(
@@ -267,28 +265,48 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
                     channel_id="orders-channel"
                 )
             )
-                        
-            # Prepare the message
+
             fcm_message = messaging.Message(
                 data=message,
                 token=token,
                 android=android_config,
             )
-            
-            # Send the message
+
             response = messaging.send(fcm_message)
             logger.info(f"FCM notification sent: {response}")
             return True
+
+        except messaging.UnregisteredError as e:
+            logger.warning(f"Token not registered (invalid or expired): {token}")
+            await delete_token_from_db(token)
+            return False
+
         except Exception as admin_error:
-            # Fall back to HTTP API if Admin SDK fails
-            logger.warning(f"Firebase Admin SDK failed, falling back to HTTP API: {str(admin_error)}")
-            return False        
+            logger.warning(f"Firebase Admin SDK failed, fallback: {str(admin_error)}")
+            return False
+
     except httpx.HTTPStatusError as e:
         logger.error(f"FCM HTTP error: {e.response.status_code} - {e.response.text}")
         return False
     except Exception as e:
         logger.error(f"Error sending FCM notification: {str(e)}")
         return False
+
+# ✅ Fonction utilitaire pour supprimer le token
+async def delete_token_from_db(token: str):
+    try:
+        async with get_db_context() as db:
+            device = await db.execute(
+                select(UserDevice).where(UserDevice.device_token == token)
+            )
+            result = device.scalars().first()
+
+            if result:
+                await db.delete(result)
+                await db.commit()
+                logger.info(f"Token supprimé de la base de données: {token}")
+    except Exception as db_error:
+        logger.error(f"Erreur lors de la suppression du token: {str(db_error)}")
 
 # No registered devices for user
 async def send_apns_notification(token: str, message: dict) -> bool:
