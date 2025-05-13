@@ -1,5 +1,5 @@
 from api import (auth, users, products, banners, categories, devices, orders, delivery_location, integrity,
-                 notifications, ratings, recommendations, localities, devises, train_model, db)
+                 notifications, ratings, recommendations, localities, websocket, devises, train_model, db)
 
 __all__ = [
     "auth",
@@ -14,6 +14,7 @@ __all__ = [
     "notifications",
     "integrity",
     "ratings",
+    "websocket",
     "recommendations",
     "localities",
     "devises",

@@ -1,22 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from models import User, UserDevice, get_db, delete_from_db
+from models import User, UserDevice, get_db, get_db_context, delete_from_db
 from typing import List, Dict, Any
 import httpx, json
 import logging
 from os import getenv
-from utils.security import get_current_user_from_token, get_current_user
+from utils.security import get_current_user
 from config import get_error_key
 from pydantic import BaseModel
-from datetime import datetime
-from utils.connection_manager import connection_manager, start_cleanup_task
 from aioapns import APNs, NotificationRequest, PushType
 from aioapns.exceptions import ConnectionError
 import asyncio
 import firebase_admin
 from firebase_admin import credentials, messaging
-from contextlib import asynccontextmanager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -48,9 +45,6 @@ if not firebase_admin._apps:
 
 # Router for our endpoints
 router = APIRouter()
-
-# Start the connection cleanup task when the router is loaded
-start_cleanup_task()
 
 # Pydantic models
 class NotificationPreference(BaseModel):
@@ -123,15 +117,6 @@ async def update_notification_preference(
         db.rollback()
         logger.error(f"Error updating notification preference: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-# Helper context manager for async DB access
-@asynccontextmanager
-async def get_db_context():
-    db = next(get_db())
-    try:
-        yield db
-    finally:
-        db.close()
 
 # Push notification functions 
 async def send_push_notification(user_id: str, message: dict) -> bool:
@@ -224,18 +209,6 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
         logger.error(f"Error sending FCM notification: {str(e)}")
         return False
 
-# ✅ Fonction utilitaire pour supprimer le token
-async def delete_token_from_db(token: str):
-    try:
-        async with get_db_context() as db:
-            device = db.query(UserDevice).filter(UserDevice.device_token == token).first()
-            if device:
-                delete_from_db(device, db)
-                logger.info(f"Token supprimé de la base de données: {token}")
-    except Exception as db_error:
-        logger.error(f"Erreur lors de la suppression du token: {str(db_error)}")
-
-# No registered devices for user
 async def send_apns_notification(token: str, message: dict) -> bool:
     """Send an iOS push notification via APNS"""
     try:
@@ -245,17 +218,9 @@ async def send_apns_notification(token: str, message: dict) -> bool:
                 "content-available": 1,
                 "sound": "default",
                 "badge": 1,
-                "mutable-content": 1,
-                "alert": {
-                    "title": message.get("title", "New notification"),
-                    "body": message.get("body", "You have a new notification")
-                }
+                "mutable-content": 1
             }
         }
-        
-        # Configure notification grouping
-        if "conversation_id" in message:
-            payload["aps"]["thread-id"] = message["conversation_id"]
         
         # Include the entire message in the payload
         for key, value in message.items():
@@ -296,6 +261,17 @@ async def send_apns_notification(token: str, message: dict) -> bool:
     except Exception as e:
         logger.error(f"Error sending APNS notification: {e}")
         return False
+
+# ✅ Fonction utilitaire pour supprimer le token
+async def delete_token_from_db(token: str):
+    try:
+        async with get_db_context() as db:
+            device = db.query(UserDevice).filter(UserDevice.device_token == token).first()
+            if device:
+                delete_from_db(device, db)
+                logger.info(f"Token supprimé de la base de données: {token}")
+    except Exception as db_error:
+        logger.error(f"Erreur lors de la suppression du token: {str(db_error)}")
 
 async def notify_users(
     message: dict, 
@@ -375,39 +351,9 @@ async def notify_users(
                         results["failed"] += 1
         
         print('=========================================')
-        print(results)
+        print("sdd: ", results)
         return results
     except Exception as e:
         logger.error(f"Error in notify_users: {str(e)}")
         return {"error": str(e), "websocket_sent": 0, "push_sent": 0, "total_users": 0, "failed": 0}
 
-# broadcast
-def get_livreurs() -> Dict[str, Any]:
-    """
-    Returns a dictionary of connected delivery drivers
-    Compatible with legacy format for existing integrations
-    """
-    try:
-        result = {}
-
-        # Get all connections with role 'deliver'
-        deliver_connections = connection_manager.get_connections_by_role('deliver')
-
-        # Create compatible dictionary format
-        for user_id in deliver_connections:
-            conn = connection_manager.get_connection(user_id)
-            if conn:
-                metadata = conn.get("metadata", {})
-                result[user_id] = {
-                    "username": metadata.get("username"),
-                    "user_id": user_id,
-                    "role": metadata.get("role"),
-                    "notifications_enabled": metadata.get("notifications_enabled"),
-                    "status": metadata.get("status", "online"),
-                    "last_seen": conn.get("last_seen", datetime.now()).isoformat()
-                }
-
-        return result
-    except Exception as e:
-        logger.error(f"Error in get_livreurs: {str(e)}")
-        return {}

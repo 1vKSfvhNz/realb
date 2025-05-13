@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import QueuePool
 from dotenv import load_dotenv
 import logging
+from contextlib import asynccontextmanager, contextmanager
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -37,13 +38,21 @@ except Exception as e:
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
-# Fonction améliorée pour obtenir une connexion à la base de données
+# Fonction améliorée pour obtenir une connexion à la base de données (générateur sync)
+@contextmanager
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+
+# Context manager asynchrone qui encapsule un context manager sync
+@asynccontextmanager
+async def get_db_context():
+    with get_db() as db:
+        yield db
+
 
 # Fonction utilitaire pour surveiller l'état du pool
 def get_pool_status():

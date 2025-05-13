@@ -58,6 +58,8 @@ app.include_router(devises.router, prefix="/api", tags=["Devises"])
 app.include_router(db.router, prefix="/api", tags=["BDD"])
 app.include_router(integrity.bundle_integrity, prefix="/api", tags=["BundleIntegrity"])
 
+app.include_router(websocket.router, tags=["WebSocket"])
+
 @app.get("/privacy-policy", response_class=HTMLResponse)
 async def read_root():
     html_path = join(TEMPLATES_DIR, "privacy-policy.html")
