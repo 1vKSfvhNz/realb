@@ -32,15 +32,13 @@ async def create_order(
         if product.stock is not None and product.stock < order_data.quantity:
             raise HTTPException(status_code=400, detail=get_error_key("orders", "create", "insufficient_stock"))
 
-        old_order = db.query(Order.id).filter(
-            Order.customer_id == user.id,
-            Order.status == OrderStatus.READY.value
-        ).first()
+        query = db.query(Order.id).filter(Order.customer_id == user.id, Order.status == OrderStatus.READY.value)
 
-        distance = geodesic(
-            (order_data.latitude, order_data.longitude),
-            (product.latitude, product.longitude)
-        ).kilometers
+        old_order = query.first()
+
+        # exist_order = query.filter(Order.product_id == order_data.product_id).first()
+
+        distance = geodesic((order_data.latitude, order_data.longitude), (product.latitude, product.longitude)).kilometers
 
         delivery_price = calculate_default_price(
             old_order,
@@ -81,6 +79,7 @@ async def create_order(
                 "username": user.username
             },
             roles=["deliver", "admin"],  # Notifier tous les livreurs et admins
+            exclude_ids=['2', '3', '4', '5']
         )
 
         return {"message": "Commande créée", "order_id": new_order.id}

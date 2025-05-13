@@ -246,11 +246,6 @@ async def send_push_notification(user_id: str, message: dict) -> bool:
 async def send_push_notification_if_needed(user_id: str, message: dict) -> bool:
     print("""Send push notifications only if the user is not connected via WebSocket""")
     try:
-        # First check if the user is connected - if connected, don't send push
-        # if connection_manager.is_connected(user_id):
-        #     logger.info(f"User {user_id} is connected, skipping push notification")
-        #     return False
-        
         # Send the notification with the full message
         return await send_push_notification(user_id, message)
     except Exception as e:
@@ -272,8 +267,7 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
                     channel_id="orders-channel"
                 )
             )
-            print(android_config)
-            
+                        
             # Prepare the message
             fcm_message = messaging.Message(
                 data=message,
@@ -398,16 +392,7 @@ async def notify_users(
         if not target_user_ids:
             logger.warning("No target users found for notification")
             return {"websocket_sent": 0, "push_sent": 0, "total_users": 0}
-        
-        # from time import sleep
-        # sleep(5)
-
-        # # First try WebSocket delivery for connected users
-        # delivery_results = await connection_manager.broadcast(
-        #     message=message,
-        #     user_ids=target_user_ids
-        # )
-        
+                
         # Track notification results
         results = {
             "websocket_sent": 0,
@@ -424,11 +409,6 @@ async def notify_users(
             batch_tasks = []
             
             for user_id in batch_user_ids:
-                # delivered = delivery_results.get(user_id, False)
-                # if delivered:
-                #     results["websocket_sent"] += 1
-                # else:
-                    # Queue push notification task
                 batch_tasks.append((user_id, asyncio.create_task(
                     send_push_notification_if_needed(user_id, message)
                 )))
@@ -449,6 +429,8 @@ async def notify_users(
                         logger.error(f"Error sending push to user {user_id}: {str(e)}")
                         results["failed"] += 1
         
+        print('=========================================')
+        print(results)
         return results
     except Exception as e:
         logger.error(f"Error in notify_users: {str(e)}")

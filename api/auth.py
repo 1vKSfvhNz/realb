@@ -99,7 +99,6 @@ async def login(
         return {
             "username": user.username,
             "access_token": access_token,
-            "token_type": "Bearer"
         }
     except HTTPException:
         # Remonter les exceptions HTTP directement
