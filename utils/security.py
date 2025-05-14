@@ -6,8 +6,8 @@ from typing import Optional
 
 import jwt
 from argon2 import PasswordHasher
-from jwt import ExpiredSignatureError, PyJWTError
-from fastapi import Depends
+from jwt import ExpiredSignatureError, PyJWTError, DecodeError
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 load_dotenv()
@@ -37,6 +37,12 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
         if email is None:
             raise ValueError("Invalid token - missing sub claim")
         return {"email": email, "id": id}
+    except DecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalide ou mal formé.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except ExpiredSignatureError:
         raise ValueError("Token expired")
     except PyJWTError as e:
