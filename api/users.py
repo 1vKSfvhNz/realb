@@ -98,6 +98,20 @@ async def user_role(
         'can_add_product': user.has_permission_to_add_product(), 
     }
 
+@router.post("/user_lang/{lang}")
+async def user_lang(
+    lang: str,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == current_user['email']).first()
+    if not user:
+        raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
+
+    user.lang = lang
+    db.commit()
+    return {}
+
 @router.put("/update_role/{id}/{role}")
 async def update_role(
     id: int,

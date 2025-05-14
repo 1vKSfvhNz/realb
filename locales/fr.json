@@ -1,0 +1,22 @@
+{
+  "default_notification_title": "Notification",
+  "default_notification_body": "Vous avez reçu un message.",
+
+  "notification_title_new_product": "Nouveau produit",
+  "notification_title_new_order": "Nouvelle commande",
+  "notification_title_new_order_of": "Commande de %1$s à livrer à temps",
+
+  "notification_order_status_update": "Mise à jour du statut de la commande",
+  "notification_delivering_by_deliverman_title": "Suivi de localisation",
+  "notification_delivering_by_deliverman": "Le suivi de votre position est actif",
+  "notification_delivering": "Votre commande est en cours de livraison par %1$s",
+  "notification_delivered": "Votre commande a été livrée par %1$s",
+
+  "notification_title_system": "Notification système",
+  "notification_title_default": "Message",
+
+  "channel_name_products": "Produits",
+  "channel_name_orders": "Commandes",
+  "channel_name_system": "Système",
+  "channel_name_default": "Messages"
+}

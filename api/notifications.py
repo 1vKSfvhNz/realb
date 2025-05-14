@@ -15,6 +15,7 @@ from aioapns.exceptions import ConnectionError
 import asyncio
 import firebase_admin
 from firebase_admin import credentials, messaging
+from utils.translation import translate
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -169,26 +170,69 @@ async def send_push_notification_if_needed(user_id: str, message: dict) -> bool:
         logger.error(f"Error in send_push_notification_if_needed: {str(e)}")
         return False
 
+def build_fcm_message(message: dict, token: str) -> messaging.Message:
+    lang = message.get("lang", "en")  # Langue par défaut : anglais
+    notif_type = message.get("type")
+    channel_id = "default_channel"
+    title = ""
+    body = ""
+
+    if notif_type == "new_product":
+        channel_id = "products_channel"
+        title = translate(lang, "notification_title_new_product")
+        body = title
+
+    elif notif_type == "new_order":
+        channel_id = "orders_channel"
+        title = translate(lang, "notification_title_new_order")
+        body = translate(lang, "notification_title_new_order_of", username=message.get("username", ""))
+        print('=========================================')
+        print(body)
+
+    elif notif_type == "order_status_update":
+        channel_id = "orders_channel"
+        title = translate(lang, "notification_order_status_update")
+        status = message.get("status")
+        deliver = message.get("deliver", "")
+        
+        if status == "delivering":
+            body = translate(lang, "notification_delivering", deliver=deliver)
+        elif status == "delivered":
+            body = translate(lang, "notification_delivered", deliver=deliver)
+
+    elif notif_type == "system_notification":
+        channel_id = "system_channel"
+        title = translate(lang, "notification_title_system")
+        body = title
+
+    else:
+        title = translate(lang, "notification_title_default")
+        body = translate(lang, "default_notification_body")
+
+    print("Notification title:", title)
+    print("Notification body:", body)
+
+    return messaging.Message(
+        data=message,
+        token=token,
+        android=messaging.AndroidConfig(
+            priority="high",
+            ttl=timedelta(days=3),
+            notification=messaging.AndroidNotification(
+                title=title,
+                body=body,
+                sound="default",
+                channel_id=channel_id
+            )
+        )
+    )
+
 async def send_fcm_notification(token: str, message: dict) -> bool:
     "Send Firebase Cloud Messaging notification for Android"
     try:
         try:
             print(message)
-
-            fcm_message = messaging.Message(
-                data=message,
-                token=token,
-                android=messaging.AndroidConfig(
-                    priority="high",
-                    ttl=timedelta(minutes=4320),
-                    notification=messaging.AndroidNotification(
-                        title=message.get("type"),
-                        # body=message.get("body"),
-                        sound="default",
-                        channel_id="orders-channel"
-                    )
-                )
-            )
+            fcm_message = build_fcm_message(message, token)
 
             response = messaging.send(fcm_message)
             logger.info(f"FCM notification sent: {response}")
@@ -351,8 +395,6 @@ async def notify_users(
                         logger.error(f"Error sending push to user {user_id}: {str(e)}")
                         results["failed"] += 1
         
-        print('=========================================')
-        print("sdd: ", results)
         return results
     except Exception as e:
         logger.error(f"Error in notify_users: {str(e)}")

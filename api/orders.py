@@ -74,6 +74,7 @@ async def create_order(
         # ✅ Notification aux livreurs connectés
         await notify_users( 
             message={
+                "lang": user.lang,
                 "type": "new_order",
                 "command_id": str(new_order.id),
                 "username": user.username
@@ -311,6 +312,7 @@ async def update_order_status(
             # Notifier le client que sa commande est en cours de livraison
             await notify_users(
                 message={
+                    "lang": user.lang,
                     "type": "order_status_update",
                     "order_id": str(id),
                     "status": "delivering",
@@ -325,6 +327,7 @@ async def update_order_status(
             # Notifier le client que sa commande a été livrée
             await notify_users(
                 message={
+                    "lang": user.lang,
                     "type": "order_status_update",
                     "order_id": str(id),
                     "status": "delivered",
