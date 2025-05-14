@@ -1,3 +1,4 @@
+from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -174,18 +175,17 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
         try:
             print(message)
 
-            android_config = messaging.AndroidConfig(
-                priority="high",
-                notification=messaging.AndroidNotification(
-                    sound="default",
-                    channel_id="orders-channel"
-                )
-            )
-
             fcm_message = messaging.Message(
                 data=message,
                 token=token,
-                android=android_config,
+                android=messaging.AndroidConfig(
+                    priority="high",
+                    ttl=timedelta(minutes=4320),
+                    notification=messaging.AndroidNotification(
+                        sound="default",
+                        channel_id="orders-channel"
+                    )
+                )
             )
 
             response = messaging.send(fcm_message)
