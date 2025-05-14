@@ -4,7 +4,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from datetime import datetime
 
 from utils.connection_manager import connection_manager, start_cleanup_task
-from models import User, get_db_context
+from models import User, get_db_async_context
 from utils.security import get_current_user_from_token
 
 # Configure logging
@@ -41,7 +41,7 @@ async def websocket_notifications(websocket: WebSocket):
             user_id = str(user["id"])
             
             # Use a context manager for DB session
-            async with get_db_context() as db:
+            async with get_db_async_context() as db:
                 # Get essential user info in one query
                 user_info = db.query(User.role, User.notifications, User.username).filter(User.id == user_id).first()
                 if not user_info:

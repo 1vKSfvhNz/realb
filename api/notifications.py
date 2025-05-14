@@ -2,7 +2,7 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from models import User, UserDevice, get_db, get_db_context, delete_from_db
+from models import User, UserDevice, get_db, get_db_async_context, delete_from_db
 from typing import List, Dict, Any
 import httpx, json
 import logging
@@ -122,7 +122,7 @@ async def update_notification_preference(
 async def send_push_notification(user_id: str, message: dict) -> bool:
     print("""Send push notifications to all devices of a user""")
     try:
-        async with get_db_context() as db:
+        async with get_db_async_context() as db:
             # Get both user and device info in one query
             user_devices = db.query(UserDevice.device_token, UserDevice.platform).filter(UserDevice.user_id == int(user_id)).all()
             
@@ -266,7 +266,7 @@ async def send_apns_notification(token: str, message: dict) -> bool:
 # ✅ Fonction utilitaire pour supprimer le token
 async def delete_token_from_db(token: str):
     try:
-        async with get_db_context() as db:
+        async with get_db_async_context() as db:
             device = db.query(UserDevice).filter(UserDevice.device_token == token).first()
             if device:
                 delete_from_db(device, db)
@@ -285,7 +285,7 @@ async def notify_users(
     """
     try:
         # Single DB connection for user retrieval
-        async with get_db_context() as db:
+        async with get_db_async_context() as db:
             target_user_ids = set()
             
             # Get users by role if specified

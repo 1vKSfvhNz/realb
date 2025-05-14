@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import QueuePool
 from dotenv import load_dotenv
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -46,10 +46,18 @@ def get_db():
     finally:
         db.close()
 
+@contextmanager
+def get_db_context():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 # Context manager asynchrone qui encapsule un context manager sync
 @asynccontextmanager
-async def get_db_context():
-    with get_db() as db:
+async def get_db_async_context():
+    with get_db_context() as db:
         yield db
 
 
