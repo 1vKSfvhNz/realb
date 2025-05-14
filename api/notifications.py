@@ -42,7 +42,6 @@ if not firebase_admin._apps:
     except Exception as e:
         logger.error(f"Failed to initialize Firebase: {str(e)}")
 
-
 # Router for our endpoints
 router = APIRouter()
 
