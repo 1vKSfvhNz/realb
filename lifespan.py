@@ -7,7 +7,7 @@ from models import (
     insert_devise,
     insert_locality,
     schedule_banner_expirations,
-    get_db
+    get_db_context
 )
 from ml_engine import predictor  # Prédicteur avec planification auto
 
@@ -16,7 +16,7 @@ scheduler = BackgroundScheduler()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    with get_db() as db:  # utilise correctement le context manager sync
+    with get_db_context() as db:  # utilise correctement le context manager sync
         try:
             # Insertions initiales
             insert_icon_types(db)
