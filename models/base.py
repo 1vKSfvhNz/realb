@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from sqlalchemy.pool import QueuePool
 from dotenv import load_dotenv
 import logging
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import asynccontextmanager
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -39,7 +39,6 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
 # Fonction améliorée pour obtenir une connexion à la base de données (générateur sync)
-@contextmanager
 def get_db():
     db = SessionLocal()
     try:

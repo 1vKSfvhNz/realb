@@ -328,6 +328,7 @@ async def update_order_status(
                     "type": "order_status_update",
                     "order_id": str(id),
                     "status": "delivered",
+                    "deliver": user.username
                 },
                 user_ids=[str(order.customer_id)]
             )

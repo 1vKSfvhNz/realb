@@ -182,6 +182,8 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
                     priority="high",
                     ttl=timedelta(minutes=4320),
                     notification=messaging.AndroidNotification(
+                        title=message.get("type"),
+                        # body=message.get("body"),
                         sound="default",
                         channel_id="orders-channel"
                     )
