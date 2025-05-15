@@ -28,7 +28,6 @@ def load_translations(lang: str) -> Dict[str, str]:
 def translate(lang: str, key: str, **kwargs) -> str:
     """Retourne la traduction d'une clé formatée avec des paramètres."""
     translations = load_translations(lang)
-    print(translations)
     text = translations.get(key, key)
     try:
         return text.format(**kwargs)

@@ -121,7 +121,7 @@ async def update_notification_preference(
 
 # Push notification functions 
 async def send_push_notification(user_id: str, message: dict) -> bool:
-    print("""Send push notifications to all devices of a user""")
+    """Send push notifications to all devices of a user"""
     try:
         async with get_db_async_context() as db:
             # Get both user and device info in one query
@@ -184,11 +184,8 @@ def build_fcm_message(message: dict, token: str) -> messaging.Message:
 
     elif notif_type == "new_order":
         channel_id = "orders_channel"
-        print('=========================================')
         title = translate(lang, "notification_title_new_order")
-        print(f'======{title}===============')
         body = translate(lang, "notification_title_new_order_of", username=message.get("username", ""))
-        print(body)
 
     elif notif_type == "order_status_update":
         channel_id = "orders_channel"
@@ -232,9 +229,7 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
     "Send Firebase Cloud Messaging notification for Android"
     try:
         try:
-            print(message)
             fcm_message = build_fcm_message(message, token)
-            print(fcm_message)
 
             response = messaging.send(fcm_message)
             logger.info(f"FCM notification sent: {response}")
