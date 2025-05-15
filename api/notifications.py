@@ -173,6 +173,7 @@ async def send_push_notification_if_needed(user_id: str, message: dict) -> bool:
 def build_fcm_message(message: dict, token: str) -> messaging.Message:
     lang = message.get("lang", "en")  # Langue par défaut : anglais
     notif_type = message.get("type")
+    print(notif_type)
     channel_id = "default_channel"
     title = ""
     body = ""
@@ -184,9 +185,9 @@ def build_fcm_message(message: dict, token: str) -> messaging.Message:
 
     elif notif_type == "new_order":
         channel_id = "orders_channel"
+        print('=========================================')
         title = translate(lang, "notification_title_new_order")
         body = translate(lang, "notification_title_new_order_of", username=message.get("username", ""))
-        print('=========================================')
         print(body)
 
     elif notif_type == "order_status_update":
@@ -233,6 +234,7 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
         try:
             print(message)
             fcm_message = build_fcm_message(message, token)
+            print(fcm_message)
 
             response = messaging.send(fcm_message)
             logger.info(f"FCM notification sent: {response}")
