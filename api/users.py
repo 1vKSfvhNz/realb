@@ -91,9 +91,10 @@ async def user_role(
         raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
 
     return {
-        'role': user.role,
+        'username': user.username,
         'email': user.email,
         'phone': user.phone,
+        'role': user.role,
         'can_add_banner': user.has_permission_to_add_banner(),
         'can_add_category': user.has_permission_to_add_category(), 
         'can_add_product': user.has_permission_to_add_product(), 

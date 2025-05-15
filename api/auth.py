@@ -96,10 +96,7 @@ async def login(
         db.commit()
 
         access_token = create_access_token(data={"sub": user.email, 'id': user.id})
-        return {
-            "username": user.username,
-            "access_token": access_token,
-        }
+        return {"access_token": access_token}
     except HTTPException:
         # Remonter les exceptions HTTP directement
         raise
