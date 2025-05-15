@@ -92,6 +92,7 @@ async def user_role(
 
     return {
         'role': user.role,
+        'email': user.email,
         'phone': user.phone,
         'can_add_banner': user.has_permission_to_add_banner(),
         'can_add_category': user.has_permission_to_add_category(), 
