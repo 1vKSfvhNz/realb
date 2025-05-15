@@ -10,6 +10,23 @@ from config import get_error_key
 router = APIRouter()
 
 # Endpoint pour mettre à jour la position du livreur
+@router.get("/tracking_status")
+async def tracking_status(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == current_user['email']).first()
+    if user.role.lower() != 'admin' and user.role.lower() != 'deliver':
+        raise HTTPException(status_code=403, detail=get_error_key("users", "list", "no_permission"))
+
+    # Vérifier si une commande existe
+    order = db.query(Order).filter(Order.delivery_person_id == user.id).first()
+    if not order:
+        return {'tracking_status': False}
+    return {'tracking_status': True}
+
+
+# Endpoint pour mettre à jour la position du livreur
 @router.post("/update_delivery_location")
 async def update_delivery_location(
     location: DeliverLocation,

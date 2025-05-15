@@ -139,7 +139,7 @@ async def send_push_notification(user_id: str, message: dict) -> bool:
             # Track sent notifications
             success_count = 0
 
-            print(user_devices)
+            print(user_devices, user_id)
             # Send to all user devices
             for device_token, platform in user_devices:
                 try:
@@ -206,9 +206,6 @@ def build_fcm_message(message: dict, token: str) -> messaging.Message:
     else:
         title = translate(lang, "notification_title_default")
         body = translate(lang, "default_notification_body")
-
-    print("Notification title:", title)
-    print("Notification body:", body)
 
     return messaging.Message(
         data=message,
