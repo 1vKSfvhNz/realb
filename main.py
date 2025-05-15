@@ -88,6 +88,10 @@ async def read_root():
         html_content = f.read()
     return HTMLResponse(content=html_content)
 
+@app.get("/")
+def root():
+    return {"message": "API is running"}
+
 # Lancer le serveur Uvicorn
 import uvicorn
 if __name__ == "__main__":
