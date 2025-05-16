@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException
 from geopy.distance import geodesic
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session, joinedload
@@ -87,21 +87,23 @@ async def create_order(
         db.rollback()
         raise e
 
-@router.get("/list_orders", response_model=list[OrderResponse])
+@router.get("/list_orders", response_model=OrdersResponse)
 async def list_orders(
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    page: int = Query(1, alias="page"),  # Page par défaut 1
+    limit: int = Query(10, alias="limit"),  # Limite par défaut
 ):
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
         if not user:
             raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
-        
-        # Récupérer toutes les commandes de l'utilisateur
+
         expiry_time = datetime.utcnow() - timedelta(minutes=3)
-        orders = (
+
+        base_query = (
             db.query(Order)
-            .options(joinedload(Order.delivery_person), joinedload(Order.rating))
+            .options(joinedload(Order.customer), joinedload(Order.delivery_person), joinedload(Order.rating))
             .filter(
                 Order.customer_id == user.id,
                 or_(
@@ -113,32 +115,35 @@ async def list_orders(
                     ),
                 )
             )
-            .order_by(Order.updated_at.asc())  # Tri du plus ancien au plus récent
+        )
+
+        total_items = base_query.count()
+        orders = (
+            base_query
+            .order_by(Order.updated_at.asc())
+            .offset((page - 1) * limit)
+            .limit(limit)
             .all()
         )
 
-        # Préparer les réponses selon le modèle OrderResponse
-        response_orders = []
+        response_orders: List[OrderResponse] = []
         for order in orders:
-            result = db.query(Product.image_url, Product.name, Product.currency).filter(Product.id == order.product_id).first()
-            if not result:
+            product = db.query(Product).filter(Product.id == order.product_id).first()
+            if not product:
                 raise HTTPException(status_code=404, detail=get_error_key("products", "not_found"))
-            
-            image_url = BASE_URL + result.image_url if result else None
-            product_name = result.name if result else None 
-            currency = result.currency if result else None 
-                    
-            # Créer un objet de réponse conforme au modèle
+
+            image_url = BASE_URL + product.image_url if product.image_url else None
+
             order_response = OrderResponse(
                 id=order.id,
                 order_number=order.order_number,
                 customer_id=order.customer_id,
-                customer_name=user.username,
-                customer_phone=user.phone,
+                customer_name=order.customer.username,
+                customer_phone=order.customer.phone,
                 product_id=order.product_id,
                 product_url=image_url,
-                product_name=product_name,
-                currency=currency,
+                product_name=product.name,
+                currency=product.currency,
                 quantity=order.quantity,
                 status=order.status,
                 payment_status=order.payment_status,
@@ -158,67 +163,77 @@ async def list_orders(
                 delivered_at=order.delivered_at,
                 cancelled_at=order.cancelled_at,
                 purchase_time=order.purchase_time,
+                purchase_time_of_day=order.purchase_time.replace(year=1900, month=1, day=1),  # ou autre logique métier
                 delivery_person_id=order.delivery_person_id,
                 delivery_person_name=order.delivery_person.username if order.delivery_person else '',
                 delivery_person_phone=order.delivery_person.phone if order.delivery_person else '',
-                rating=True if order.rating else False
+                rating=bool(order.rating)
             )
             response_orders.append(order_response)
-        
-        return response_orders
+
+        pagination = Pagination(
+            currentPage=page,
+            totalPages=(total_items + limit - 1) // limit,
+            totalItems=total_items,
+            itemsPerPage=limit,
+        )
+        return OrdersResponse(orders=response_orders, pagination=pagination)
     except Exception as e:
         db.rollback()
-        raise e
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/list_orders_by_deliverman", response_model=list[OrderResponse])
+@router.get("/list_orders_by_deliverman", response_model=OrdersResponse)
 async def list_orders_by_deliverman(
     current_user: dict = Depends(get_current_user),
+    page: int = Query(1, alias="page"),
+    limit: int = Query(10, alias="limit"),
 ):
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
         if not user or (user.role != 'Admin' and user.role != 'Deliver'):
             raise HTTPException(status_code=404, detail=get_error_key("general", "not_found"))
-        
-        # Récupérer toutes les commandes de l'utilisateur
-        expiry_time = datetime.now() - timedelta(minutes=3)
-        orders = (
-            db.query(Order)
-            .options(joinedload(Order.customer), joinedload(Order.rating))  # charge les données du client en même temps que la commande
-            .filter(
-                or_(
-                    and_(
-                        Order.status == OrderStatus.READY.value,
-                        Order.customer_id != user.id,
-                    ),
-                    and_(
-                        Order.status == OrderStatus.DELIVERING.value,
-                        Order.delivery_person_id == user.id,
-                    ),
-                    and_(
-                        Order.status != OrderStatus.READY.value,
-                        Order.status != OrderStatus.DELIVERING.value,
-                        Order.delivery_person_id == user.id,
-                        Order.updated_at >= expiry_time
-                    )
+
+        expiry_time = datetime.utcnow() - timedelta(minutes=3)
+
+        # Requête de base
+        base_query = db.query(Order).options(
+            joinedload(Order.customer), 
+            joinedload(Order.rating)
+        ).filter(
+            or_(
+                and_(
+                    Order.status == OrderStatus.READY.value,
+                    Order.customer_id != user.id,
+                ),
+                and_(
+                    Order.status == OrderStatus.DELIVERING.value,
+                    Order.delivery_person_id == user.id,
+                ),
+                and_(
+                    Order.status.notin_([OrderStatus.READY.value, OrderStatus.DELIVERING.value]),
+                    Order.delivery_person_id == user.id,
+                    Order.updated_at >= expiry_time,
                 )
             )
-            .order_by(Order.updated_at.asc())  # Tri du plus ancien au plus récent
-            .all()
-        )    
+        ).order_by(Order.updated_at.asc())
 
-        # Préparer les réponses selon le modèle OrderResponse
+        # Compte total pour pagination
+        total_items = base_query.count()
+
+        # Récupération des éléments paginés
+        orders = base_query.offset((page - 1) * limit).limit(limit).all()
+
         response_orders = []
         for order in orders:
             result = db.query(Product.image_url, Product.name, Product.currency).filter(Product.id == order.product_id).first()
             if not result:
                 raise HTTPException(status_code=404, detail=get_error_key("products", "not_found"))
-            
-            image_url = BASE_URL + result.image_url if result else None
-            product_name = result.name if result else None 
-            currency = result.currency if result else None 
-                    
-            # Créer un objet de réponse conforme au modèle
+
+            image_url = BASE_URL + result.image_url
+            product_name = result.name
+            currency = result.currency
+
             order_response = OrderResponse(
                 id=order.id,
                 order_number=order.order_number,
@@ -248,16 +263,26 @@ async def list_orders_by_deliverman(
                 delivered_at=order.delivered_at,
                 cancelled_at=order.cancelled_at,
                 purchase_time=order.purchase_time,
+                delivery_person_id=order.delivery_person_id,
+                delivery_person_name=order.delivery_person.username if order.delivery_person else None,
+                delivery_person_phone=order.delivery_person.phone if order.delivery_person else None,
                 rating=True if order.rating else False
             )
             response_orders.append(order_response)
-        
-        return response_orders
+
+        pagination = Pagination(
+            currentPage=page,
+            totalPages=(total_items + limit - 1) // limit,
+            totalItems=total_items,
+            itemsPerPage=limit,
+        )
+        return OrdersResponse(orders=response_orders, pagination=pagination)
+    
     except Exception as e:
         db.rollback()
         raise e
     finally:
-        db.close()  # Important: fermer la session pour libérer la connexion
+        db.close()
 
 @router.post("/cancel_order/{id}")
 async def cancel_order(

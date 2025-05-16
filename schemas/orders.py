@@ -1,4 +1,4 @@
-from . import BaseModel, Enum, Field, Optional, datetime, List, Dict
+from . import BaseModel, Enum, Field, Optional, datetime, List, Pagination
 
 # Énumérations pour les schémas
 class OrderStatusEnum(str, Enum):
@@ -105,11 +105,11 @@ class OrderResponse(BaseModel):
     class Config:
         from_attributes = True
         populate_by_name = True
-        
+
 # Schéma pour la liste paginée des commandes
 class OrdersResponse(BaseModel):
     orders: List[OrderResponse]
-    pagination: Dict[str, int]
+    pagination: Pagination
 
 # Schémas pour les actions sur les commandes
 class OrderStatusUpdate(BaseModel):
