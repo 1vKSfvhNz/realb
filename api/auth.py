@@ -46,7 +46,6 @@ async def create_user(
                 body_file="user_created.html",
                 context={'username': user.username, 'Code': code_user.code},
             )
-            print(f'======================={user.username}=========================')
         except Exception as e:
             logging.error(f"Erreur lors de l'envoi de l'email : {e}", exc_info=True)
             
@@ -96,7 +95,7 @@ async def login(
         db.commit()
 
         access_token, expire = create_access_token(data={"sub": user.email, 'id': user.id})
-        return {"access_token": access_token, 'expire': expire}
+        return {"access_token": access_token, 'token_expire': expire}
     except HTTPException:
         # Remonter les exceptions HTTP directement
         raise
