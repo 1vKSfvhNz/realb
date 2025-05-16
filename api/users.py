@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Form
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, and_, func
 from sqlalchemy.orm import Session
 
@@ -20,7 +20,7 @@ async def user_list(
     order: Optional[str] = Query("asc", alias="order")  # Ordre de tri
 ):
     user = db.query(User).filter(User.email == current_user['email']).first()
-    if user.role != 'Admin':
+    if user.role.lower() != 'admin':
         raise HTTPException(status_code=403, detail=get_error_key("users", "list", "no_permission"))
     
     query = db.query(User)
@@ -81,8 +81,8 @@ async def user_list(
         }
     }
 
-@router.get("/user_role")
-async def user_role(
+@router.get("/user_data")
+async def user_data(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -122,7 +122,7 @@ async def update_role(
     db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.email == current_user['email']).first()
-    if user.role != 'Admin':
+    if user.role.lower() != 'admin':
         raise HTTPException(status_code=403, detail=get_error_key("users", "update_role", "no_permission"))
     user_to_update = db.query(User).filter(User.id == id).first()
     if role.lower() == 'admin':
@@ -141,7 +141,7 @@ async def update_can_add_banner(
     db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.email == current_user['email']).first()
-    if user.role != 'Admin':
+    if user.role.lower() != 'admin':
         raise HTTPException(status_code=403, detail=get_error_key("users", "update_can_add_banner", "no_permission"))
     user_to_update = db.query(User).filter(User.id == id).first()
 
@@ -160,7 +160,7 @@ async def update_can_add_category(
     db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.email == current_user['email']).first()
-    if user.role != 'Admin':
+    if user.role.lower() != 'admin':
         raise HTTPException(status_code=403, detail=get_error_key("users", "update_can_add_category", "no_permission"))
     user_to_update = db.query(User).filter(User.id == id).first()
 
@@ -179,7 +179,7 @@ async def update_can_add_product(
     db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.email == current_user['email']).first()
-    if user.role != 'Admin':
+    if user.role.lower() != 'admin':
         raise HTTPException(status_code=403, detail=get_error_key("users", "update_can_add_product", "no_permission"))
     user_to_update = db.query(User).filter(User.id == id).first()
 

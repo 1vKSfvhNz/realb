@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy import desc, case
 from sqlalchemy.orm import Session
@@ -6,7 +8,7 @@ from models import Product, User, get_db
 from schemas import ProductsResponse, Dict
 from utils.security import get_current_user
 from ml_engine import predictor
-from config import get_error_key, BASE_URL, error, info
+from config import get_error_key, BASE_URL
 
 router = APIRouter()
 
@@ -36,7 +38,7 @@ async def get_my_recommendations(
         
         # Gérer le cas où aucune recommandation n'est disponible
         if not recommended_products or not recommendation_result.get('success', False):
-            info(f"Aucune recommandation personnalisée disponible pour l'utilisateur {user.id}. "
+            logging.info(f"Aucune recommandation personnalisée disponible pour l'utilisateur {user.id}. "
                         f"Raison: {recommendation_result.get('message', 'Inconnue')}")
             
             # Rediriger vers les produits populaires comme solution de repli
@@ -98,7 +100,7 @@ async def get_my_recommendations(
         }
     except Exception as e:
         # Journaliser l'erreur avec plus de détails
-        error(f"Erreur lors de la récupération des recommandations personnalisées: {str(e)}", exc_info=True)
+        logging.error(f"Erreur lors de la récupération des recommandations personnalisées: {str(e)}", exc_info=True)
         
         # Retourner une liste vide avec pagination correcte
         return {

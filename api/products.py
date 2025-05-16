@@ -1,4 +1,5 @@
 import os
+import logging
 from shutil import copyfileobj, make_archive
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Form
@@ -297,7 +298,7 @@ async def get_fallback_recommendations(
         }
     except Exception as e:
         # Journaliser l'erreur avec plus de détails
-        error(f"Erreur lors de la récupération des produits populaires: {str(e)}", exc_info=True)
+        logging.error(f"Erreur lors de la récupération des produits populaires: {str(e)}", exc_info=True)
         
         # Retourner une liste vide avec pagination correcte
         return {

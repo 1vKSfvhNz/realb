@@ -95,8 +95,8 @@ async def login(
         user.last_login = datetime.now(timezone.utc)
         db.commit()
 
-        access_token = create_access_token(data={"sub": user.email, 'id': user.id})
-        return {"access_token": access_token}
+        access_token, expire = create_access_token(data={"sub": user.email, 'id': user.id})
+        return {"access_token": access_token, 'expire': expire}
     except HTTPException:
         # Remonter les exceptions HTTP directement
         raise
