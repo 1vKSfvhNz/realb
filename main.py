@@ -30,7 +30,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://realb.onrender.com", "http://192.168.11.103:8000"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_methods=["HEAD", "GET", "POST", "PUT", "DELETE"],
     allow_headers=[
         "Content-Type",
         "Authorization",
@@ -88,6 +88,10 @@ async def read_root():
     return HTMLResponse(content=html_content)
 
 @app.get("/")
+def root():
+    return {"message": "API is running"}
+
+@app.head("/")
 def root():
     return {"message": "API is running"}
 
