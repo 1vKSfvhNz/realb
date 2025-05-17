@@ -92,7 +92,8 @@ async def list_orders(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
     page: int = Query(1, alias="page"),  # Page par défaut 1
-    limit: int = Query(10, alias="limit"),  # Limite par défaut
+    limit: int = Query(10, alias="limit"),  # Limite par défaut 10
+    status: Optional[str] = Query(None, alias="status"),  # Paramètre optionnel status
 ):
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
@@ -101,11 +102,19 @@ async def list_orders(
 
         expiry_time = datetime.utcnow() - timedelta(minutes=3)
 
+        # Base query sur les commandes du client
         base_query = (
             db.query(Order)
             .options(joinedload(Order.customer), joinedload(Order.delivery_person), joinedload(Order.rating))
-            .filter(
-                Order.customer_id == user.id,
+            .filter(Order.customer_id == user.id)
+        )
+
+        # Filtrer par status si défini et différent de 'all'
+        if status and status.lower() != 'all':
+            base_query = base_query.filter(Order.status == status)
+        else:
+            # Sinon appliquer filtre par défaut existant
+            base_query = base_query.filter(
                 or_(
                     Order.status == OrderStatus.READY.value,
                     Order.status == OrderStatus.DELIVERING.value,
@@ -115,7 +124,6 @@ async def list_orders(
                     ),
                 )
             )
-        )
 
         total_items = base_query.count()
         orders = (
@@ -163,7 +171,7 @@ async def list_orders(
                 delivered_at=order.delivered_at,
                 cancelled_at=order.cancelled_at,
                 purchase_time=order.purchase_time,
-                purchase_time_of_day=order.purchase_time.replace(year=1900, month=1, day=1),  # ou autre logique métier
+                purchase_time_of_day=order.purchase_time.replace(year=1900, month=1, day=1) if order.purchase_time else None,
                 delivery_person_id=order.delivery_person_id,
                 delivery_person_name=order.delivery_person.username if order.delivery_person else '',
                 delivery_person_phone=order.delivery_person.phone if order.delivery_person else '',
@@ -187,11 +195,12 @@ async def list_orders_by_deliverman(
     current_user: dict = Depends(get_current_user),
     page: int = Query(1, alias="page"),
     limit: int = Query(10, alias="limit"),
+    status: Optional[str] = Query(None, alias="status"),  # Paramètre optionnel status
 ):
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
-        if not user or (user.role != 'Admin' and user.role != 'Deliver'):
+        if not user or (user.role.lower() != 'admin' and user.role.lower() != 'deliver'):
             raise HTTPException(status_code=404, detail=get_error_key("general", "not_found"))
 
         expiry_time = datetime.utcnow() - timedelta(minutes=3)
@@ -200,23 +209,32 @@ async def list_orders_by_deliverman(
         base_query = db.query(Order).options(
             joinedload(Order.customer), 
             joinedload(Order.rating)
-        ).filter(
-            or_(
-                and_(
-                    Order.status == OrderStatus.READY.value,
-                    Order.customer_id != user.id,
-                ),
-                and_(
-                    Order.status == OrderStatus.DELIVERING.value,
-                    Order.delivery_person_id == user.id,
-                ),
-                and_(
-                    Order.status.notin_([OrderStatus.READY.value, OrderStatus.DELIVERING.value]),
-                    Order.delivery_person_id == user.id,
-                    Order.updated_at >= expiry_time,
+        )
+        
+        if status and status != 'all':
+            if status == 'ready':
+                base_query.filter(Order.status == status)
+            else:
+                base_query.filter(Order.status == status, Order.delivery_person_id == user.id)
+        else:
+            base_query = base_query.filter(
+                or_(
+                    and_(
+                        Order.status == OrderStatus.READY.value,
+                        Order.customer_id != user.id,
+                    ),
+                    and_(
+                        Order.status != OrderStatus.READY.value,
+                        Order.delivery_person_id == user.id,
+                    ),
+                    and_(
+                        Order.status.notin_([OrderStatus.READY.value, OrderStatus.DELIVERING.value]),
+                        Order.delivery_person_id == user.id,
+                        Order.updated_at >= expiry_time,
+                    )
                 )
-            )
-        ).order_by(Order.updated_at.asc())
+            ).order_by(Order.updated_at.asc())
+        
 
         # Compte total pour pagination
         total_items = base_query.count()
