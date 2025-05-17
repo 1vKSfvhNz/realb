@@ -215,6 +215,7 @@ async def list_orders_by_deliverman(
             if status == 'ready':
                 base_query.filter(Order.status == status)
             else:
+                print('lllllllllllllllllllllllll')
                 base_query.filter(Order.status == status, Order.delivery_person_id == user.id)
         else:
             base_query = base_query.filter(
