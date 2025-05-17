@@ -212,8 +212,10 @@ async def list_orders_by_deliverman(
         )
         
         if status and status != 'all':
-            if status == 'ready' or status == 'delivering':
+            if status == 'ready':
                 base_query = base_query.filter(Order.status == status)
+            elif status == 'delivering':
+                base_query = base_query.filter(Order.status == status, Order.delivery_person_id == user.id)
             else:
                 base_query = base_query.filter(Order.status == status, Order.delivery_person_id == user.id, Order.updated_at >= expiry_time)
         else:
