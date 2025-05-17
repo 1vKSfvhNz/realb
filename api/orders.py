@@ -213,11 +213,9 @@ async def list_orders_by_deliverman(
         
         if status and status != 'all':
             if status == 'ready':
-                base_query.filter(Order.status == status)
-                print(base_query.count())
+                base_query = base_query.filter(Order.status == status)
             else:
-                base_query.filter(Order.status == status, Order.delivery_person_id == user.id, Order.updated_at >= expiry_time)
-                print(base_query.count())
+                base_query = base_query.filter(Order.status == status, Order.delivery_person_id == user.id, Order.updated_at >= expiry_time)
         else:
             base_query = base_query.filter(
                 or_(
@@ -236,10 +234,10 @@ async def list_orders_by_deliverman(
                     )
                 )
             ).order_by(Order.updated_at.asc())
-            print(base_query.count())        
 
         # Compte total pour pagination
         total_items = base_query.count()
+        print(total_items)        
 
         # Récupération des éléments paginés
         orders = base_query.offset((page - 1) * limit).limit(limit).all()
