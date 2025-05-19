@@ -1,7 +1,7 @@
 from os import getenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Engine, Pool
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
-from sqlalchemy.pool import QueuePool
+from sqlalchemy.pool import QueuePool, NullPool
 from dotenv import load_dotenv
 import logging
 from contextlib import asynccontextmanager, contextmanager
@@ -13,12 +13,12 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("database")
 
-DATABASE_URL = getenv('URL')
+DATABASE_URL: str = getenv('URL')
 
 # Configuration optimisée du pool de connexions
-engine = create_engine(
+engine: Engine = create_engine(
     DATABASE_URL, 
-    poolclass=QueuePool,
+    poolclass=NullPool,
     pool_size=20,            # Augmenté pour gérer les pics de trafic
     max_overflow=40,         # Augmenté pour éviter les timeouts
     pool_timeout=90,         # Délai suffisant pour obtenir une connexion
@@ -64,7 +64,7 @@ async def get_db_async_context():
 # Fonction utilitaire pour surveiller l'état du pool
 def get_pool_status():
     """Renvoie l'état actuel du pool de connexions"""
-    pool = engine.pool
+    pool: Pool = engine.pool
     return {
         "size": pool.size(),
         "checkedin": pool.checkedin(),
