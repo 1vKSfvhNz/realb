@@ -1,7 +1,6 @@
 from os import getenv
 from sqlalchemy import create_engine, Engine, Pool
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
-from sqlalchemy.pool import QueuePool, NullPool
 from dotenv import load_dotenv
 import logging
 from contextlib import asynccontextmanager, contextmanager
@@ -11,20 +10,24 @@ load_dotenv()
 
 # Configurer le logger pour surveiller les connexions
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("database")
+logger = logging.getLogger(__name__)
 
-DATABASE_URL: str = getenv('URL')
+DATABASE_URL: str = getenv("URL")
+
+# Vérifie que l'URL est présente
+if not DATABASE_URL:
+    logger.error("❌ La variable d'environnement 'URL' n'est pas définie.")
+    raise ValueError("DATABASE_URL non défini.")
 
 # Configuration optimisée du pool de connexions
 engine: Engine = create_engine(
-    DATABASE_URL, 
-    poolclass=NullPool,
-    pool_size=20,            # Augmenté pour gérer les pics de trafic
-    max_overflow=40,         # Augmenté pour éviter les timeouts
-    pool_timeout=90,         # Délai suffisant pour obtenir une connexion
-    pool_recycle=300,       # Recycle les connexions après une heure
-    pool_pre_ping=True,      # Vérifie que les connexions sont valides
-    echo_pool=True           # Active la journalisation du pool en développement
+    DATABASE_URL,
+    pool_size=20,            # Gérer les pics de trafic
+    max_overflow=40,         # Évite les timeouts en période de forte charge
+    pool_timeout=90,         # Temps d'attente avant échec de la connexion
+    pool_recycle=300,        # Recycle les connexions inactives (ex: après 5 minutes)
+    pool_pre_ping=True,      # Vérifie que la connexion est active
+    echo_pool=True           # Journalisation pour le développement
 )
 
 # Test de connexion initial
@@ -32,9 +35,9 @@ try:
     with engine.connect() as conn:
         logger.info("✅ Connexion réussie à la base de données")
 except Exception as e:
-    logger.error(f"❌ Erreur de connexion : {e}")
-    # Ne pas planter l'application, mais logger l'erreur
+    logger.error(f"❌ Erreur de connexion à la base de données : {e}")
 
+# Initialisation de la session et du base model
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
