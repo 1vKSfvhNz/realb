@@ -33,8 +33,6 @@ async def lifespan(app: FastAPI):
             yield  # Exécution normale de l'app
 
         finally:
-            db.close()  # En principe inutile ici car "with" le gère, mais OK si tu fais autre chose dans le bloc
-
-    # --- À l'arrêt ---
-    predictor.stop_scheduler()
-    scheduler.shutdown()
+            # Arrêt propre des schedulers
+            predictor.stop_scheduler()
+            scheduler.shutdown()

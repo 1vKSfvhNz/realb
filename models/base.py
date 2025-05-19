@@ -1,6 +1,7 @@
 from os import getenv
 from sqlalchemy import create_engine, Engine, Pool
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
+from sqlalchemy.pool import QueuePool
 from dotenv import load_dotenv
 import logging
 from contextlib import asynccontextmanager, contextmanager
@@ -22,12 +23,13 @@ if not DATABASE_URL:
 # Configuration optimisée du pool de connexions
 engine: Engine = create_engine(
     DATABASE_URL,
+    poolclass=QueuePool,
     pool_size=20,            # Gérer les pics de trafic
     max_overflow=40,         # Évite les timeouts en période de forte charge
     pool_timeout=90,         # Temps d'attente avant échec de la connexion
     pool_recycle=300,        # Recycle les connexions inactives (ex: après 5 minutes)
     pool_pre_ping=True,      # Vérifie que la connexion est active
-    echo_pool=True           # Journalisation pour le développement
+    echo_pool=True,           # Journalisation pour le développement
 )
 
 # Test de connexion initial
