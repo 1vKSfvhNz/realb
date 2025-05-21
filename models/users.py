@@ -20,7 +20,7 @@ class User(Base):
     rating_at = Column(DateTime, nullable=True)
     
     is_active = Column(Boolean, default=True, nullable=False)
-    notifications = Column(Boolean, default=False, nullable=False)
+    notifications = Column(Boolean, default=True, nullable=False)
     role = Column(String(16), default='Admin', nullable=False)  # 'Admin', 'Moderator', 'User'
     lang = Column(String(2), default='fr', nullable=True)
     devices = relationship("UserDevice", back_populates="user")

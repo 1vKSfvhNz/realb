@@ -301,7 +301,7 @@ async def send_apns_notification(token: str, message: dict) -> bool:
         logger.error(f"Error sending APNS notification: {e}")
         return False
 
-# ✅ Fonction utilitaire pour supprimer le token
+# ✅ Fonction utilitaire pour supprimer le token No target users found for notification
 async def delete_token_from_db(token: str):
     try:
         async with get_db_async_context() as db:
