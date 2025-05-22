@@ -9,8 +9,8 @@
   "notification_order_status_update": "Mise à jour du statut de la commande",
   "notification_delivering_by_deliverman_title": "Suivi de localisation",
   "notification_delivering_by_deliverman": "Le suivi de votre position est actif",
-  "notification_delivering": "Votre commande est en cours de livraison par {username}",
-  "notification_delivered": "Votre commande a été livrée par {username}",
+  "notification_delivering": "Votre commande est en cours de livraison par {deliver}",
+  "notification_delivered": "Votre commande a été livrée par {deliver}",
 
   "notification_title_system": "Notification système",
   "notification_title_default": "Message",

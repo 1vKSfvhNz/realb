@@ -9,8 +9,8 @@
   "notification_order_status_update": "Order Status Update",
   "notification_delivering_by_deliverman_title": "Location Tracking",
   "notification_delivering_by_deliverman": "Your location tracking is active",
-  "notification_delivering": "Your order is being delivered by {username}",
-  "notification_delivered": "Your order was delivered by {username}",
+  "notification_delivering": "Your order is being delivered by {deliver}",
+  "notification_delivered": "Your order was delivered by {deliver}",
 
   "notification_title_system": "System notification",
   "notification_title_default": "Message",
