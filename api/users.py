@@ -20,7 +20,7 @@ async def user_list(
     order: Optional[str] = Query("asc", alias="order")  # Ordre de tri
 ):
     user = db.query(User).filter(User.email == current_user['email']).first()
-    if user.role.lower() != 'admin':
+    if user.role != 'admin':
         raise HTTPException(status_code=403, detail=get_error_key("users", "list", "no_permission"))
     
     query = db.query(User)
@@ -64,7 +64,7 @@ async def user_list(
 
     users = query.all()
     for user in users:
-        if user.role.lower() == 'admin':
+        if user.role == 'admin':
             user.can_add_banner = True
             user.can_add_category = True
             user.can_add_product = True

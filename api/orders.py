@@ -200,7 +200,7 @@ async def list_orders_by_deliverman(
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
-        if not user or (user.role.lower() != 'admin' and user.role.lower() != 'deliver'):
+        if not user or (user.role != 'admin' and user.role != 'deliver'):
             raise HTTPException(status_code=404, detail=get_error_key("general", "not_found"))
 
         expiry_time = datetime.utcnow() - timedelta(minutes=3)
@@ -213,7 +213,7 @@ async def list_orders_by_deliverman(
         
         if status and status != 'all':
             if status == 'ready':
-                base_query = base_query.filter(Order.status == status)
+                base_query = base_query.filter(Order.status == status, Order.customer_id != user.id)
             elif status == 'delivering':
                 base_query = base_query.filter(Order.status == status, Order.delivery_person_id == user.id)
             else:
@@ -306,7 +306,7 @@ async def list_orders_by_deliverman(
 
 @router.post("/cancel_order/{id}")
 async def cancel_order(
-    id: int,
+    id: str,
     body: CancelOrderRequest,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -337,13 +337,13 @@ async def cancel_order(
 
 @router.post("/update_order_status/{id}")
 async def update_order_status(
-    id: int,
+    id: str,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
         user = db.query(User).filter(User.email == current_user['email']).first()
-        if not user or (user.role != 'Admin' and user.role != 'Livreur'):
+        if not user or (user.role != 'admin' and user.role != 'deliver'):
             raise HTTPException(status_code=404, detail=get_error_key("general", "not_found"))
 
         # Récupérer la commande

@@ -22,7 +22,7 @@ def download_uploads(
 ):
     # Vérification des permissions
     user = db.query(User).filter(User.email == current_user['email']).first()
-    if not user or user.role.lower() != 'admin':
+    if not user or user.role != 'admin':
         raise HTTPException(status_code=403, detail=get_error_key("products", "list", "no_permission"))
 
     zip_path = "uploads_backup.zip"
@@ -132,7 +132,7 @@ async def myproducts(
         raise HTTPException(status_code=403, detail=get_error_key("products", "list", "no_permission"))
     
     query = db.query(Product)
-    if user.role.lower() != 'admin':
+    if user.role != 'admin':
         query = query.filter(Product.owner_id == user.id)
 
     # Recherche textuelle si spécifiée
