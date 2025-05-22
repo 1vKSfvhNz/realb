@@ -80,6 +80,7 @@ async def create_order(
                 "username": user.username
             },
             roles=["deliver", "admin"],  # Notifier tous les livreurs et admins
+            exclude_ids=[str(user.id)]
         )
 
         return {"message": "Commande créée", "order_id": new_order.id}
