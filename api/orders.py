@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from geopy.distance import geodesic
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, asc
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 
@@ -111,7 +111,7 @@ async def list_orders(
 
         # Filtrer par status si défini et différent de 'all'
         if status and status.lower() != 'all':
-            base_query = base_query.filter(Order.status == status)
+            base_query = base_query.filter(Order.status == status).order_by(asc(Order.created_at))
         else:
             # Sinon appliquer filtre par défaut existant
             base_query = base_query.filter(
@@ -123,7 +123,7 @@ async def list_orders(
                         Order.updated_at >= expiry_time
                     ),
                 )
-            )
+            ).order_by(asc(Order.created_at))
 
         total_items = base_query.count()
         orders = (
@@ -209,7 +209,7 @@ async def list_orders_by_deliverman(
         base_query = db.query(Order).options(
             joinedload(Order.customer), 
             joinedload(Order.rating)
-        )
+        ).order_by(asc(Order.created_at))
         
         if status and status != 'all':
             if status == 'ready':
@@ -239,7 +239,6 @@ async def list_orders_by_deliverman(
 
         # Compte total pour pagination
         total_items = base_query.count()
-        print(total_items)        
 
         # Récupération des éléments paginés
         orders = base_query.offset((page - 1) * limit).limit(limit).all()

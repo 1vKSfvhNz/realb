@@ -104,10 +104,8 @@ async def create_banner(
     file_extension = filename.rsplit(".", 1)[-1] if "." in filename else ""
 
     if file_extension in IMAGE_EXTENSIONS:
-        file_type = "image"
         upload_dir = UPLOAD_IMAGE_DIR_Banners
     elif file_extension in VIDEO_EXTENSIONS:
-        file_type = "video"
         upload_dir = UPLOAD_VIDEO_DIR_Banners
     else:
         raise HTTPException(status_code=400, detail=get_error_key("banners", "create", "unsupported_format"))
@@ -160,10 +158,8 @@ async def update_banner(
         file_extension = filename.rsplit(".", 1)[-1] if "." in filename else ""
 
         if file_extension in IMAGE_EXTENSIONS:
-            file_type = "image"
             upload_dir = UPLOAD_IMAGE_DIR_Banners
         elif file_extension in VIDEO_EXTENSIONS:
-            file_type = "video"
             upload_dir = UPLOAD_VIDEO_DIR_Banners
         else:
             raise HTTPException(status_code=400, detail=get_error_key("banners", "update", "unsupported_format"))
@@ -182,16 +178,16 @@ async def update_banner(
 
     db_banner.title = title
     db_banner.subtitle = subtitle
-    db_banner.discountPercent = discount_percent
     db_banner.is_active = is_active
     db_banner.is_new = is_new
     db_banner.until = until_datetime
 
-    if discount_percent > 0:
+    if discount_percent > 0 and db_banner.discountPercent != discount_percent:
+        db_banner.discountPercent = discount_percent
         products = db.query(Product).filter(Product.banner_id == db_banner.id).all()
         for product in products:
             old_price = product.price
-            price = price * (1 - discount_percent/100)
+            price = old_price * (1 - discount_percent/100)
             product.price = price
             product.old_price = old_price
             product.discount = discount_percent
