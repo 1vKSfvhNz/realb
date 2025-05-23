@@ -1,3 +1,4 @@
+from datetime import timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, and_, func
 from sqlalchemy.orm import Session
@@ -89,6 +90,7 @@ async def user_data(
     user = db.query(User).filter(User.email == current_user['email']).first()
     if not user:
         raise HTTPException(status_code=404, detail=get_error_key("users", "not_found"))
+    user.last_login = datetime.now(timezone.utc)
 
     return {
         'username': user.username,
