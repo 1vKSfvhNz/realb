@@ -55,7 +55,7 @@ app.include_router(recommendations.router, prefix="/api", tags=["Recommendations
 app.include_router(train_model.router, prefix="/api", tags=["Trainners"])
 app.include_router(localities.router, prefix="/api", tags=["Localities"])
 app.include_router(devises.router, prefix="/api", tags=["Devises"])
-app.include_router(db.router, prefix="/api", tags=["BDD"])
+app.include_router(db.router, prefix="/api", tags=["BDD"]) 
 app.include_router(integrity.bundle_integrity, prefix="/api", tags=["BundleIntegrity"])
 app.include_router(websocket.router, tags=["WebSocket"])
 

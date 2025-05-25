@@ -16,6 +16,7 @@ import asyncio
 import firebase_admin
 from firebase_admin import credentials, messaging
 from utils.translation import translate
+from devices import DeviceRegistration, register_device
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -234,7 +235,7 @@ async def send_fcm_notification(token: str, message: dict) -> bool:
 
         except messaging.UnregisteredError as e:
             logger.warning(f"Token not registered (invalid or expired): {token}")
-            await delete_token_from_db(token)
+            # await delete_token_from_db(token)
             return False
 
         except Exception as admin_error:
