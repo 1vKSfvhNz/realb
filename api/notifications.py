@@ -16,7 +16,7 @@ import asyncio
 import firebase_admin
 from firebase_admin import credentials, messaging
 from utils.translation import translate
-from devices import DeviceRegistration, register_device
+# from devices import DeviceRegistration, register_device
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
